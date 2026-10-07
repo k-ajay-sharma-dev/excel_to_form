@@ -67,8 +67,7 @@ USE_I18N = False
 USE_TZ = True
 
 STATIC_URL = "static/"
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000  # review page posts one input per question
+DATA_UPLOAD_MAX_MEMORY_SIZE = 20 * 1024 * 1024  # uploaded sheets are stored in the database

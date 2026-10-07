@@ -6,8 +6,8 @@ import logging
 import threading
 import traceback
 
-from django.conf import settings
 from django.db import close_old_connections
+from django.utils import timezone
 
 from engine import browser, excel
 
@@ -37,7 +37,9 @@ def process_job(job_id):
     job.status = "processing"
     job.save(update_fields=["status"])
     try:
-        df = excel.read_table(job.file.path)
+        df = excel.read_table(job.data, job.name)
+        job.total_rows = len(df)
+        job.save(update_fields=["total_rows"])
         mapping = excel.build_mapping(df)
         for r in range(len(df)):
             fields = excel.row_fields(df, mapping, r)
@@ -59,7 +61,8 @@ def process_job(job_id):
     except Exception:
         job.status = "error"
         job.message = traceback.format_exc()[-2000:]
-    job.save(update_fields=["status", "message"])
+    job.finished = timezone.now()
+    job.save(update_fields=["status", "message", "finished"])
 
 
 def fill_row(row_id, submit=False):
@@ -73,15 +76,12 @@ def fill_row(row_id, submit=False):
     row.status = "submitting" if submit else "filling"
     row.save(update_fields=["status"])
 
-    shots = settings.MEDIA_ROOT / "screens"
-    shots.mkdir(parents=True, exist_ok=True)
-    shot_name = f"screens/job{row.job_id}_row{row.row_no}.png"
     payload = [{"question": f.question, "instance": f.instance, "value": f.value, "flags": f.flags} for f in fields]
 
     try:
         res = browser.run_row(cfg.form_url, payload, submit=real_submit,
                               may_submit=lambda: AppSettings.get().submit_enabled, headless=cfg.headless,
-                              slow_mo=cfg.slow_mo, screenshot=settings.MEDIA_ROOT / shot_name, log=log.info)
+                              slow_mo=cfg.slow_mo, screenshot=True, log=log.info)
     except Exception as e:
         row.status, row.message = "error", f"{type(e).__name__}: {e}"
         row.save(update_fields=["status", "message"])
@@ -111,7 +111,8 @@ def fill_row(row_id, submit=False):
         status = "ready"
 
     row.status, row.message = status, "\n".join(m for m in msg if m)
-    row.screenshot = shot_name if (settings.MEDIA_ROOT / shot_name).exists() else ""
+    if res["screenshot"]:
+        row.screenshot = res["screenshot"]
     row.save(update_fields=["status", "message", "screenshot"])
 
 

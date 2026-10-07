@@ -9,6 +9,7 @@ order, so we re-anchor it: every choice question's answer is an XML choice name 
 where that name really sits tells us the shift at that point of the sheet.
 """
 import datetime as dt
+import io
 import re
 
 import pandas as pd
@@ -22,10 +23,14 @@ def slug(s):
     return re.sub(r"_+", "_", re.sub(r"[^a-z0-9]", "_", str(s).lower())).strip("_")
 
 
-def read_table(path):
-    if str(path).lower().endswith(".csv"):
-        return pd.read_csv(path, dtype=object)
-    return pd.read_excel(path, dtype=object)
+def read_table(src, name=None):
+    """src: a file path, or the file's bytes (then `name` tells CSV from Excel)."""
+    name = str(name or src)
+    if isinstance(src, (bytes, bytearray, memoryview)):
+        src = io.BytesIO(bytes(src))
+    if name.lower().endswith(".csv"):
+        return pd.read_csv(src, dtype=object)
+    return pd.read_excel(src, dtype=object)
 
 
 def is_blank(v):

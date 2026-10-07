@@ -31,11 +31,15 @@ class AppSettings(models.Model):
 
 class Job(models.Model):
     STATUS = [("queued", "Queued"), ("processing", "Processing"), ("done", "Done"), ("error", "Error")]
-    file = models.FileField(upload_to="uploads/")
+    # the uploaded file is kept in the database with its results until the user deletes the upload
     name = models.CharField(max_length=255)
+    data = models.BinaryField()
+    size = models.PositiveIntegerField(default=0)
     created = models.DateTimeField(auto_now_add=True)
+    finished = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS, default="queued")
     message = models.TextField(blank=True)
+    total_rows = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["-created"]
@@ -64,7 +68,8 @@ class Row(models.Model):
     title = models.CharField(max_length=255)
     status = models.CharField(max_length=20, choices=STATUS, default="pending")
     message = models.TextField(blank=True)
-    screenshot = models.CharField(max_length=255, blank=True)
+    screenshot = models.BinaryField(null=True, blank=True)  # JPEG of the form after the last run
+    updated = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["row_no"]

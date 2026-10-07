@@ -2,7 +2,11 @@
 {% block head %}{% if job.busy %}<meta http-equiv="refresh" content="4">{% endif %}{% endblock %}
 {% block content %}
 <p class="small"><a href="{% url 'upload' %}">&larr; All uploads</a></p>
-<h1>{{ job.name }}</h1>
+<div class="row-actions" style="justify-content:space-between">
+  <h1>{{ job.name }}</h1>
+  <span class="row-actions"><a class="btn" href="{% url 'job_file' job.pk %}">Download file</a>
+    {% with j=job %}{% include "filler/_delete.html" %}{% endwith %}</span>
+</div>
 <p class="sub">
   <span class="pill s-{{ job.status }}">{{ job.get_status_display }}</span>
   {{ job.message|truncatechars:120 }}

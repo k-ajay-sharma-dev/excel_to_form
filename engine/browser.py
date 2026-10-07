@@ -215,14 +215,15 @@ SUBMISSION = re.compile(r"/submission", re.I)
 
 
 def run_row(form_url, fields, *, submit=False, may_submit=None, headless=True, slow_mo=0,
-            screenshot=None, log=print):
+            screenshot=False, log=print):
     """
     Fill one record. fields: [{question, instance, value, flags}].
     may_submit: callable re-checked right before the Submit click (e.g. reads the Settings switch);
     if it returns False at that moment, nothing is sent.
-    Returns {results: [{status, kind, options}], invalid: [...], submitted: bool, message: str}.
+    screenshot=True: return a JPEG of the filled form (before any submit) in out["screenshot"].
+    Returns {results: [{status, kind, options}], invalid: [...], submitted: bool, message: str, screenshot}.
     """
-    out = {"results": [], "invalid": [], "submitted": False, "message": ""}
+    out = {"results": [], "invalid": [], "submitted": False, "message": "", "screenshot": None}
     gate = {"open": False}
 
     with sync_playwright() as p:
@@ -263,7 +264,7 @@ def run_row(form_url, fields, *, submit=False, may_submit=None, headless=True, s
 
             out["invalid"] = page.evaluate(INVALID_JS)
             if screenshot:
-                page.screenshot(path=str(screenshot), full_page=True)
+                out["screenshot"] = page.screenshot(full_page=True, type="jpeg", quality=55)
 
             problems = [r for r in out["results"] if r["status"].startswith(PROBLEM)]
             if not submit:

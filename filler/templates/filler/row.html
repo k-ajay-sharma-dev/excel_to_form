@@ -61,7 +61,7 @@
 {% if row.screenshot %}
 <div class="card shot">
   <h2>Form as filled in the last run</h2>
-  <a href="/media/{{ row.screenshot }}" target="_blank"><img src="/media/{{ row.screenshot }}?v={% now 'U' %}" alt="Screenshot of the filled form"></a>
+  <a href="{% url 'row_shot' row.pk %}" target="_blank"><img src="{% url 'row_shot' row.pk %}?v={{ row.updated|date:'U' }}" alt="Screenshot of the filled form"></a>
 </div>
 {% endif %}
 {% endblock %}

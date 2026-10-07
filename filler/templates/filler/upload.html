@@ -14,16 +14,25 @@
 </div>
 
 <div class="card">
-  <h2>Recent uploads</h2>
+  <h2>Upload history</h2>
   {% if jobs %}
   <table>
-    <tr><th>File</th><th class="hide-sm">Uploaded</th><th>Status</th><th></th></tr>
+    <tr><th>File</th><th class="hide-sm">Uploaded</th><th class="hide-sm">Rows</th><th class="hide-sm">Results</th><th>Status</th><th></th></tr>
     {% for j in jobs %}
     <tr>
-      <td>{{ j.name }}</td>
-      <td class="hide-sm muted">{{ j.created|date:"d M Y, H:i" }}</td>
+      <td>{{ j.name }}<div class="muted small">{{ j.size|filesizeformat }} · <a href="{% url 'job_file' j.pk %}">download</a></div></td>
+      <td class="hide-sm muted small">{{ j.created|date:"d M Y, H:i" }}{% if j.finished %}<br>done {{ j.finished|date:"H:i" }}{% endif %}</td>
+      <td class="hide-sm">{{ j.n_rows }}{% if j.total_rows and j.total_rows != j.n_rows %} <span class="muted small">of {{ j.total_rows }}</span>{% endif %}</td>
+      <td class="hide-sm small">
+        {% if j.n_submitted %}<span class="pill s-submitted">{{ j.n_submitted }} submitted</span> {% endif %}
+        {% if j.n_ready %}<span class="pill s-ready">{{ j.n_ready }} ready</span> {% endif %}
+        {% if j.n_review %}<span class="pill s-review">{{ j.n_review }} to review</span>{% endif %}
+      </td>
       <td><span class="pill s-{{ j.status }}">{{ j.get_status_display }}</span></td>
-      <td><a href="{% url 'job' j.pk %}">Open</a></td>
+      <td><div class="row-actions" style="flex-wrap:nowrap">
+        <a class="btn" href="{% url 'job' j.pk %}">Open</a>
+        {% include "filler/_delete.html" %}
+      </div></td>
     </tr>
     {% endfor %}
   </table>

@@ -1,4 +1,9 @@
+import mimetypes
+from urllib.parse import quote
+
 from django.contrib import messages
+from django.db.models import Count, Q
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from . import tasks
@@ -11,14 +16,48 @@ def upload(request):
         form = UploadForm(request.POST, request.FILES)
         if form.is_valid():
             f = form.cleaned_data["file"]
-            job = Job.objects.create(file=f, name=f.name)
+            job = Job.objects.create(name=f.name, data=f.read(), size=f.size)
             tasks.start(tasks.process_job, job.pk)
             return redirect("job", job.pk)
     else:
         form = UploadForm()
-    return render(request, "filler/upload.html", {
-        "form": form, "jobs": Job.objects.all()[:20], "cfg": AppSettings.get(),
-    })
+    jobs = Job.objects.defer("data").annotate(
+        n_rows=Count("rows"),
+        n_submitted=Count("rows", filter=Q(rows__status="submitted")),
+        n_review=Count("rows", filter=Q(rows__status="review")),
+        n_ready=Count("rows", filter=Q(rows__status="ready")),
+    )[:100]
+    return render(request, "filler/upload.html", {"form": form, "jobs": jobs, "cfg": AppSettings.get()})
+
+
+def job_delete(request, pk):
+    """Delete an upload with everything stored for it (file, rows, fields, screenshots)."""
+    job = get_object_or_404(Job.objects.defer("data"), pk=pk)
+    if request.method != "POST":
+        return redirect("job", pk)
+    if job.busy:
+        messages.info(request, "This upload is still being processed. Delete it when it has finished.")
+        return redirect("job", pk)
+    name = job.name
+    job.delete()
+    messages.success(request, f"Deleted {name} and all its results.")
+    return redirect("upload")
+
+
+def job_file(request, pk):
+    """Download the originally uploaded file (kept in the database)."""
+    job = get_object_or_404(Job, pk=pk)
+    ctype = mimetypes.guess_type(job.name)[0] or "application/octet-stream"
+    resp = HttpResponse(bytes(job.data), content_type=ctype)
+    resp["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(job.name)}"
+    return resp
+
+
+def row_shot(request, pk):
+    row = get_object_or_404(Row, pk=pk)
+    if not row.screenshot:
+        raise Http404
+    return HttpResponse(bytes(row.screenshot), content_type="image/jpeg")
 
 
 def settings_view(request):
@@ -32,8 +71,8 @@ def settings_view(request):
 
 
 def job_detail(request, pk):
-    job = get_object_or_404(Job, pk=pk)
-    rows = list(job.rows.prefetch_related("fields"))
+    job = get_object_or_404(Job.objects.defer("data"), pk=pk)
+    rows = list(job.rows.defer("screenshot").prefetch_related("fields"))
     if request.method == "POST" and request.POST.get("action") == "submit_ready":
         ready = [r.pk for r in rows if r.status == "ready"]
         if ready:
@@ -63,7 +102,7 @@ def _choices(f):
 
 
 def row_review(request, pk):
-    row = get_object_or_404(Row.objects.select_related("job"), pk=pk)
+    row = get_object_or_404(Row.objects.select_related("job").defer("job__data"), pk=pk)
     fields = list(row.fields.all())
 
     if request.method == "POST" and not row.busy:
