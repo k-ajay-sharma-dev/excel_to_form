@@ -8,7 +8,34 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = ["*"]
-CSRF_TRUSTED_ORIGINS = ["https://*.vercel.app", "https://*.render.com", "https://*.onrender.com"]
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.railway.app",
+    "https://*.up.railway.app",
+    "http://*.railway.app",
+    "http://*.up.railway.app",
+    "https://*.vercel.app",
+    "https://*.now.sh",
+    "https://*.render.com",
+    "https://*.onrender.com",
+    "http://localhost",
+    "http://127.0.0.1",
+]
+
+# Add Railway environment domains if present
+RAILWAY_PUBLIC_DOMAIN = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
+if RAILWAY_PUBLIC_DOMAIN:
+    CSRF_TRUSTED_ORIGINS.append(f"https://{RAILWAY_PUBLIC_DOMAIN}")
+    CSRF_TRUSTED_ORIGINS.append(f"http://{RAILWAY_PUBLIC_DOMAIN}")
+
+VERCEL_URL = os.environ.get("VERCEL_URL")
+if VERCEL_URL:
+    url = f"https://{VERCEL_URL}" if not VERCEL_URL.startswith("http") else VERCEL_URL
+    if url not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(url)
 
 env_origins = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
 for o in env_origins:
@@ -31,6 +58,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
+    "kobo_web.middleware.DynamicCsrfOriginMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
 ]
