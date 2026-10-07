@@ -33,7 +33,11 @@ def start(fn, *args):
 
 def process_job(job_id):
     """Read + realign the sheet, store every row, then check-fill each row (never submits)."""
-    job = Job.objects.get(pk=job_id)
+    try:
+        job = Job.objects.get(pk=job_id)
+    except Job.DoesNotExist:
+        log.info(f"Job {job_id} deleted before processing started.")
+        return
     job.status = "processing"
     job.save(update_fields=["status"])
     try:
@@ -42,6 +46,9 @@ def process_job(job_id):
         job.save(update_fields=["total_rows"])
         mapping = excel.build_mapping(df)
         for r in range(len(df)):
+            if not Job.objects.filter(pk=job_id).exists():
+                log.info(f"Job {job_id} deleted during row creation.")
+                return
             fields = excel.row_fields(df, mapping, r)
             if not fields:
                 continue
@@ -56,18 +63,35 @@ def process_job(job_id):
         job.message = f"{len(df)} rows in file, {len(rows)} with data."
         job.save(update_fields=["message"])
         for pk in rows:
+            try:
+                job.refresh_from_db()
+                if job.status == "error":  # User stopped the job
+                    log.info(f"Job {job_id} was stopped by user.")
+                    return
+            except Job.DoesNotExist:
+                log.info(f"Job {job_id} was deleted by user.")
+                return
             fill_row(pk, submit=False)
         job.status = "done"
-    except Exception:
+    except Exception as e:
+        if not Job.objects.filter(pk=job_id).exists():
+            return
         job.status = "error"
         job.message = traceback.format_exc()[-2000:]
-    job.finished = timezone.now()
-    job.save(update_fields=["status", "message", "finished"])
+    try:
+        job.finished = timezone.now()
+        job.save(update_fields=["status", "message", "finished"])
+    except Job.DoesNotExist:
+        pass
 
 
 def fill_row(row_id, submit=False):
     """Fill one row in the browser. submit=True submits only if Settings allow it and nothing is wrong."""
-    row = Row.objects.get(pk=row_id)
+    try:
+        row = Row.objects.get(pk=row_id)
+    except Row.DoesNotExist:
+        log.info(f"Row {row_id} deleted; skipping fill_row.")
+        return
     cfg = AppSettings.get()
     fields = list(row.fields.all())
     unreviewed = any(f.note and not f.reviewed for f in fields)
@@ -83,8 +107,11 @@ def fill_row(row_id, submit=False):
                               may_submit=lambda: AppSettings.get().submit_enabled, headless=cfg.headless,
                               slow_mo=cfg.slow_mo, screenshot=True, log=log.info)
     except Exception as e:
-        row.status, row.message = "error", f"{type(e).__name__}: {e}"
-        row.save(update_fields=["status", "message"])
+        try:
+            row.status, row.message = "error", f"{type(e).__name__}: {e}"
+            row.save(update_fields=["status", "message"])
+        except Row.DoesNotExist:
+            pass
         return
 
     results = res["results"] + [{"status": "FAILED: not reached (browser stopped)", "kind": None, "options": []}] * (
@@ -112,10 +139,13 @@ def fill_row(row_id, submit=False):
     else:
         status = "ready"
 
-    row.status, row.message = status, "\n".join(m for m in msg if m)
-    if res["screenshot"]:
-        row.screenshot = res["screenshot"]
-    row.save(update_fields=["status", "message", "screenshot"])
+    try:
+        row.status, row.message = status, "\n".join(m for m in msg if m)
+        if res["screenshot"]:
+            row.screenshot = res["screenshot"]
+        row.save(update_fields=["status", "message", "screenshot"])
+    except Row.DoesNotExist:
+        pass
 
 
 def submit_rows(row_ids):

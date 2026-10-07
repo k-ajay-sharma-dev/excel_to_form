@@ -217,7 +217,7 @@ def _is_multi(df, header, col, kid_cols):
 
 
 def choice_selected(value, flags, options):
-    """Indexes of the options an Excel answer picks: by XML choice name, else by the 0/1 columns."""
+    """Indexes of the options an Excel answer picks: by XML choice name, combined with the 0/1 columns."""
     names = [slug(o) for o in options]
     picked = []
     for t in value.split():
@@ -225,13 +225,22 @@ def choice_selected(value, flags, options):
             if i not in picked and _is_choice_name(t, [n]):
                 picked.append(i)
                 break
-    if not picked and flags:
-        picked = [i for i, f in enumerate(flags) if f and i < len(options)]
+    if flags:
+        for i, f in enumerate(flags):
+            if f and i < len(options) and i not in picked:
+                picked.append(i)
     return picked
 
 
 def _cell(row, j):
     return row.iloc[j] if j is not None and 0 <= j < len(row) else None
+
+
+def is_option_selected(v):
+    if is_blank(v):
+        return False
+    s = str(v).strip().lower()
+    return s not in ("0", "false", "no", "none", "nan")
 
 
 def row_fields(df, mapping, r):
@@ -243,7 +252,7 @@ def row_fields(df, mapping, r):
             continue
         h = m["header"]
         value = clean_value(h, _cell(row, m["col"]))
-        flags = [clean_value(h, _cell(row, j)) in ("1", "true", "True", "TRUE") for j in m["kid_cols"]]
+        flags = [is_option_selected(_cell(row, j)) for j in m["kid_cols"]]
         note, suggestion = "", ""
         if m["alt_col"] is not None and m.get("off", 0) != 0:
             alt = clean_value(h, _cell(row, m["alt_col"]))
@@ -263,7 +272,7 @@ def row_fields(df, mapping, r):
             kind = "checkbox" if m["multi"] else "radio"
             options = [[slug(o), o] for o in m["options"]]
             picked = choice_selected(value, flags, m["options"])
-            if picked and (not value or len(picked) == len(value.split())):
+            if picked:
                 value = " ".join(options[i][0] for i in picked)
         out.append({
             "header": h,

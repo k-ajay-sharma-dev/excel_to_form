@@ -134,15 +134,16 @@ def fill_question(page, q, value, flags=None):
             i = _pick(t, values, labels)
             if i is None:
                 missing.append(t)
-            else:
+            elif i not in picks:
                 picks.append(i)
         how = ""
-        if (missing or not tokens) and flags and any(flags):
-            # fall back to the Excel 0/1 option columns, same order as the form
-            picks, missing = [i for i, f in enumerate(flags) if f and i < len(opts)], []
-            how = " by 0/1 columns"
-            if len(flags) != len(opts):
-                how += f" (WARNING: {len(flags)} option columns in Excel vs {len(opts)} options on form)"
+        if flags and any(flags):
+            for i, f in enumerate(flags):
+                if f and i < len(opts) and i not in picks:
+                    picks.append(i)
+            if not tokens:
+                missing = []
+            how = " (with 0/1 columns)"
         if missing:
             return f"FAILED: {', '.join(missing)} is not an option of this question", kind, opts
         if not picks:

@@ -1,5 +1,7 @@
 <form method="post" action="{% url 'job_delete' j.pk %}" style="margin:0"
       onsubmit="return confirm('Delete {{ j.name|escapejs }} and all its results? This cannot be undone.')">
   {% csrf_token %}
-  <button class="btn" style="color:var(--bad)" {% if j.busy %}disabled title="Still processing"{% endif %}>Delete</button>
+  <button class="btn" style="color: #dc2626; background: #fef2f2; border-color: #fecaca; font-weight: 600; font-size: 13px;">
+    Delete
+  </button>
 </form>

@@ -37,9 +37,6 @@ def job_delete(request, pk):
     job = get_object_or_404(Job.objects.defer("data"), pk=pk)
     if request.method != "POST":
         return redirect("job", pk)
-    if job.busy:
-        messages.info(request, "This upload is still being processed. Delete it when it has finished.")
-        return redirect("job", pk)
     name = job.name
     job.delete()
     messages.success(request, f"Deleted {name} and all its results.")
@@ -94,13 +91,21 @@ def settings_view(request):
 def job_detail(request, pk):
     job = get_object_or_404(Job.objects.defer("data"), pk=pk)
     rows = list(job.rows.defer("screenshot").prefetch_related("fields"))
-    if request.method == "POST" and request.POST.get("action") == "submit_ready":
-        ready = [r.pk for r in rows if r.status == "ready"]
-        if ready:
-            Row.objects.filter(pk__in=ready).update(status="submitting")
-            tasks.start(tasks.submit_rows, ready)
-            messages.info(request, f"Submitting {len(ready)} row(s)…")
-        return redirect("job", pk)
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "submit_ready":
+            ready = [r.pk for r in rows if r.status == "ready"]
+            if ready:
+                Row.objects.filter(pk__in=ready).update(status="submitting")
+                tasks.start(tasks.submit_rows, ready)
+                messages.info(request, f"Submitting {len(ready)} row(s)…")
+            return redirect("job", pk)
+        elif action == "stop_job" and job.busy:
+            job.status = "error"
+            job.message = "Processing stopped by user."
+            job.save(update_fields=["status", "message"])
+            messages.info(request, "Processing stopped.")
+            return redirect("job", pk)
     for r in rows:
         r.n_flagged = len(r.flagged())
     counts = {}
@@ -124,8 +129,10 @@ def _picked(f, value):
             hit = excel.choice_selected(t, [], values) or excel.choice_selected(t, [], labels)
             i = hit[0] if hit else None
         (picked if i is not None else unknown).append(i if i is not None else t)
-    if not tokens and f.flags:
-        picked = [k for k, on in enumerate(f.flags) if on and k < len(values)]
+    if f.flags:
+        for k, on in enumerate(f.flags):
+            if on and k < len(values) and k not in picked:
+                picked.append(k)
     return (picked if f.kind == "checkbox" else picked[:1]), unknown
 
 

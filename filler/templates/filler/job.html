@@ -2,28 +2,49 @@
 {% block content %}
 <div id="live" {% if job.busy %}data-poll="{% url 'job_status' job.pk %}"{% endif %} data-sig="{{ sig }}"></div>
 
-<div style="margin-bottom: 20px;">
-  <p class="small" style="margin-bottom: 8px;">
-    <a href="{% url 'upload' %}" style="display: inline-flex; align-items: center; gap: 4px;">
+<div style="margin-bottom: 24px;">
+  <!-- Breadcrumb nav -->
+  <p class="small" style="margin-bottom: 12px;">
+    <a href="{% url 'upload' %}" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--primary);">
       <svg style="width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5;" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       All Uploads
     </a>
   </p>
-  <div class="row-actions" style="justify-content: space-between; align-items: center;">
-    <h1 style="margin: 0; word-break: break-word;">{{ job.name }}</h1>
-    <div class="row-actions">
-      <a class="btn" href="{% url 'job_file' job.pk %}">
-        <svg style="width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2;" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+  <!-- Header Section with Title on Left, Buttons on Right -->
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap;">
+    <div>
+      <h1 style="margin: 0 0 6px; font-size: 24px; font-weight: 800; word-break: break-word; color: var(--text-main);">{{ job.name }}</h1>
+      <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+        <span class="pill s-{{ job.status }}">
+          {% if job.busy %}<span class="spinner"></span>{% endif %}
+          {{ job.get_status_display }}
+        </span>
+        <span class="muted small" style="font-weight: 500;">{{ job.message|truncatechars:120 }}</span>
+        {% if job.busy %}
+          <span class="muted small" style="font-weight: 600; color: var(--primary);">• Live updating as browser validates rows</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Right-aligned Action Buttons Toolbar -->
+    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+      {% if job.busy %}
+        <form method="post" style="margin: 0;" onsubmit="return confirm('Stop processing remaining rows for this job?')">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="stop_job">
+          <button class="btn danger" style="padding: 8px 14px; font-size: 13px;">
+            🛑 Stop Processing
+          </button>
+        </form>
+      {% endif %}
+      <a class="btn" href="{% url 'job_file' job.pk %}" style="font-size: 13px;">
+        <svg style="width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2;" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Download File
       </a>
       {% with j=job %}{% include "filler/_delete.html" %}{% endwith %}
     </div>
   </div>
-  <p class="sub" style="margin-top: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-    <span class="pill s-{{ job.status }}">{% if job.busy %}<span class="spinner"></span>{% endif %}{{ job.get_status_display }}</span>
-    <span>{{ job.message|truncatechars:120 }}</span>
-    {% if job.busy %}<span class="muted small">• Live updating as browser validates rows</span>{% endif %}
-  </p>
 </div>
 
 {% if job.status == "error" %}
@@ -31,23 +52,23 @@
 {% endif %}
 
 {% if counts %}
-<div class="card" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);">
-  <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between;">
-    <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: center;">
+<div class="card" style="padding: 16px 24px; margin-bottom: 24px; background: #ffffff;">
+  <div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; gap: 32px; flex-wrap: wrap; align-items: center;">
       {% for k, v in counts.items %}
       <div style="display: flex; flex-direction: column;">
-        <span style="font-size: 22px; font-weight: 800; color: var(--text-main); line-height: 1.2;">{{ v }}</span>
-        <span class="muted small" style="text-transform: capitalize; font-weight: 600;">{{ k }}</span>
+        <span style="font-size: 24px; font-weight: 800; color: var(--text-main); line-height: 1.1;">{{ v }}</span>
+        <span class="muted small" style="text-transform: capitalize; font-weight: 600; margin-top: 2px;">{{ k }}</span>
       </div>
       {% endfor %}
     </div>
     
     <div>
-      <form method="post">{% csrf_token %}
+      <form method="post" style="margin: 0;">{% csrf_token %}
         <input type="hidden" name="action" value="submit_ready">
-        <button class="btn primary" {% if not n_ready %}disabled{% endif %}
+        <button class="btn primary" {% if not n_ready %}disabled{% endif %} style="padding: 9px 18px;"
           onclick="return confirm('{% if cfg.submit_enabled %}Submit {{ n_ready }} ready row(s) to the LIVE Kobo form?{% else %}Run the submit check on {{ n_ready }} row(s)? (Submission is off - nothing will be sent.){% endif %}')">
-          <svg style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2;" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg style="width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.2;" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Submit All Ready Rows ({{ n_ready }})
         </button>
       </form>
