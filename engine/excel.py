@@ -184,13 +184,50 @@ def build_mapping(df):
             "kid_cols": [H.index(k) + e["off"] for k in kids.get(h, [])],
             "alt_col": None if e["alt_off"] is None else i + e["alt_off"],
             "conf": e["conf"],
+            # option labels from the "Question/Option" columns, in form order
+            "options": [k[len(h):].lstrip()[1:].strip() for k in kids.get(h, [])],
+            "multi": False,
         }
+        if m["options"]:
+            m["multi"] = _is_multi(df, h, col, m["kid_cols"])
+        elif 0 <= col < n:
+            # plain yes/no questions have no option columns in the export; offer Yes/No anyway
+            vals = {clean_value(h, v).lower() for v in df.iloc[:, col]} - {""}
+            if vals and vals <= {"yes", "no"}:
+                m["options"], m["yes_no"] = ["Yes", "No"], True
         if _skip_header(h):
             m["conf"] = "skip"
         elif col >= data_meta_start:
             m["conf"] = "phantom"
         mapping.append(m)
     return mapping
+
+
+def _is_multi(df, header, col, kid_cols):
+    """Tick-all-that-apply question? (header says so, or some row has several answers)."""
+    if re.search(r"tick all|select all|all that apply", header, re.I):
+        return True
+    for r in range(len(df)):
+        row = df.iloc[r]
+        if len(clean_value(header, _cell(row, col)).split()) > 1:
+            return True
+        if sum(clean_value(header, _cell(row, j)) in ("1", "true", "True") for j in kid_cols) > 1:
+            return True
+    return False
+
+
+def choice_selected(value, flags, options):
+    """Indexes of the options an Excel answer picks: by XML choice name, else by the 0/1 columns."""
+    names = [slug(o) for o in options]
+    picked = []
+    for t in value.split():
+        for i, n in enumerate(names):
+            if i not in picked and _is_choice_name(t, [n]):
+                picked.append(i)
+                break
+    if not picked and flags:
+        picked = [i for i, f in enumerate(flags) if f and i < len(options)]
+    return picked
 
 
 def _cell(row, j):
@@ -218,15 +255,27 @@ def row_fields(df, mapping, r):
         if not value and not any(flags) and not note:
             continue  # nothing in Excel -> leave blank
         question, instance = split_instance(h)
+        excel_value = value
+        kind, options = "", []
+        if m["options"]:
+            # until the live form tells us its exact options, offer the Excel's own option columns;
+            # option values are slugs of the labels, which the filler matches against the form
+            kind = "checkbox" if m["multi"] else "radio"
+            options = [[slug(o), o] for o in m["options"]]
+            picked = choice_selected(value, flags, m["options"])
+            if picked and (not value or len(picked) == len(value.split())):
+                value = " ".join(options[i][0] for i in picked)
         out.append({
             "header": h,
             "question": question,
             "instance": instance,
             "value": value,
-            "excel_value": value,
+            "excel_value": excel_value,
             "flags": flags if any(flags) else [],
             "suggestion": suggestion,
             "note": note,
+            "kind": kind,
+            "options": options,
         })
     return out
 

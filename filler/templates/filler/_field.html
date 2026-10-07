@@ -1,7 +1,7 @@
 <div class="field">
   <div>
     <label class="q" for="f_{{ f.pk }}">{{ f.question }}{% if f.instance %} <span class="muted">(entry {{ f.instance|add:1 }})</span>{% endif %}</label>
-    {% if f.excel_value != f.value %}<div class="meta">Excel: {{ f.excel_value|default:"(empty)" }}</div>{% endif %}
+    {% if f.changed %}<div class="meta">Excel said: {{ f.excel_value|default:"(empty)" }}</div>{% endif %}
     {% if f.problem %}<div class="{% if f.status|slice:':6' == 'FAILED' or f.status|slice:':7' == 'SKIPPED' %}problem{% else %}note{% endif %}">{{ f.problem }}</div>{% endif %}
     {% if f.status and not f.problem %}<div class="meta">{{ f.status }}</div>{% endif %}
   </div>

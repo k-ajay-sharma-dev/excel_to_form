@@ -49,7 +49,7 @@ def process_job(job_id):
             Field.objects.bulk_create([
                 Field(row=row, order=k, header=f["header"], question=f["question"], instance=f["instance"],
                       value=f["value"], excel_value=f["excel_value"], suggestion=f["suggestion"],
-                      flags=f["flags"], note=f["note"])
+                      flags=f["flags"], note=f["note"], kind=f["kind"], options=f["options"])
                 for k, f in enumerate(fields)
             ])
         rows = list(job.rows.values_list("pk", flat=True))
@@ -90,7 +90,9 @@ def fill_row(row_id, submit=False):
     results = res["results"] + [{"status": "FAILED: not reached (browser stopped)", "kind": None, "options": []}] * (
         len(fields) - len(res["results"]))
     for f, r in zip(fields, results):
-        f.status, f.kind, f.options = r["status"], r["kind"] or "", r["options"] or []
+        f.status = r["status"]
+        if r["kind"] and r["options"]:  # the live form's own options beat the ones read from the Excel
+            f.kind, f.options = r["kind"], r["options"]
     Field.objects.bulk_update(fields, ["status", "kind", "options"])
 
     flagged = [f for f in fields if f.needs_review]

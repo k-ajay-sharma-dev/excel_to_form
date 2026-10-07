@@ -6,6 +6,8 @@ from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
+from engine import excel
+
 from . import tasks
 from .forms import SettingsForm, UploadForm
 from .models import AppSettings, Job, Row
@@ -110,13 +112,31 @@ def job_detail(request, pk):
     })
 
 
+def _picked(f, value):
+    """(indexes of the options `value` selects, tokens that match no option)."""
+    values, labels = [o[0] for o in f.options], [o[1] for o in f.options]
+    tokens = value.split() if f.kind == "checkbox" else ([value] if value else [])
+    picked, unknown = [], []
+    for t in tokens:
+        # exact value first, then the same fuzzy match the Excel reader uses (by value, then by label)
+        i = next((k for k, v in enumerate(values) if v.lower() == t.lower()), None)
+        if i is None:
+            hit = excel.choice_selected(t, [], values) or excel.choice_selected(t, [], labels)
+            i = hit[0] if hit else None
+        (picked if i is not None else unknown).append(i if i is not None else t)
+    if not tokens and f.flags:
+        picked = [k for k, on in enumerate(f.flags) if on and k < len(values)]
+    return (picked if f.kind == "checkbox" else picked[:1]), unknown
+
+
 def _choices(f):
-    """Options for the review widget, with the current value(s) pre-selected."""
-    chosen = set(f.value.split()) if f.kind == "checkbox" else {f.value}
-    low = {c.lower() for c in chosen}
-    opts = [{"value": v, "label": lab, "selected": v in chosen or v.lower() in low} for v, lab in f.options]
-    if f.value and not any(o["selected"] for o in opts):
-        opts.insert(0, {"value": f.value, "label": f"{f.value}  (from Excel - not an option)", "selected": True})
+    """Options for the review widget, with the current answer(s) ticked."""
+    picked, unknown = _picked(f, f.value)
+    opts = [{"value": v, "label": lab, "selected": k in picked} for k, (v, lab) in enumerate(f.options)]
+    for t in unknown:
+        opts.insert(0, {"value": t, "label": f"{t}  (from Excel - not an option)", "selected": True})
+    # show the raw Excel answer only when the current answer differs from it
+    f.changed = sorted(_picked(f, f.excel_value)[0]) != sorted(picked) or bool(unknown)
     return opts
 
 
@@ -147,6 +167,7 @@ def row_review(request, pk):
     flagged = [f for f in fields if f.needs_review]
     others = [f for f in fields if not f.needs_review]
     for f in fields:
+        f.changed = f.excel_value != f.value
         f.choices = _choices(f) if f.kind in ("radio", "checkbox") and f.options else None
     siblings = list(row.job.rows.values_list("pk", flat=True))
     i = siblings.index(row.pk)
