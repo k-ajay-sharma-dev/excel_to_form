@@ -7,9 +7,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
-CSRF_TRUSTED_ORIGINS = []
-RENDER_HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME")  # set by Render automatically
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".vercel.app", ".now.sh"]
+CSRF_TRUSTED_ORIGINS = ["https://*.vercel.app"]
+
+env_hosts = os.environ.get("ALLOWED_HOSTS", "").split(",")
+for h in env_hosts:
+    h = h.strip()
+    if h and h not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(h)
+
+VERCEL_URL = os.environ.get("VERCEL_URL")
+if VERCEL_URL and VERCEL_URL not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(VERCEL_URL)
+    CSRF_TRUSTED_ORIGINS.append(f"https://{VERCEL_URL}")
+
+RENDER_HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
 if RENDER_HOST:
     ALLOWED_HOSTS.append(RENDER_HOST)
     CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_HOST}")
