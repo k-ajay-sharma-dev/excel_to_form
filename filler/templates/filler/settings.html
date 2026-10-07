@@ -1,29 +1,65 @@
 {% extends "filler/base.html" %}
 {% block content %}
-<h1>Settings</h1>
-<p class="sub">Which form to fill and how the browser runs.</p>
+<div style="margin-bottom: 28px;">
+  <h1>System & Automation Settings</h1>
+  <p class="sub">Configure target KoboToolbox form URL, execution speeds, browser visibility, and submission safety locks.</p>
+</div>
 
-<form method="post" class="card">
+<form method="post" class="card" style="max-width: 760px;">
   {% csrf_token %}
-  <p><label><b>{{ form.form_url.label }}</b><br>{{ form.form_url }}</label>
-     <span class="muted small">The Enketo link, for example https://ee-eu.kobotoolbox.org/x/XXXXXXXX</span></p>
-  {% if form.form_url.errors %}<p class="banner bad small">{{ form.form_url.errors|join:" " }}</p>{% endif %}
+  
+  <div style="margin-bottom: 24px;">
+    <label style="display: block; font-weight: 700; margin-bottom: 6px; color: var(--text-main);">
+      {{ form.form_url.label }}
+    </label>
+    {{ form.form_url }}
+    <span class="muted small" style="display: block; margin-top: 6px;">
+      The web form URL (Enketo link), e.g., <code>https://ee-eu.kobotoolbox.org/x/NYkgOz8F</code>
+    </span>
+    {% if form.form_url.errors %}<p class="banner bad small" style="margin-top: 8px;">{{ form.form_url.errors|join:" " }}</p>{% endif %}
+  </div>
 
-  <p><label>{{ form.headless }} {{ form.headless.label }}</label><br>
-     <span class="muted small">Untick to watch the browser fill the form (on the computer running this app).</span></p>
+  <div style="margin-bottom: 24px; padding: 16px; background: #f8fafc; border: 1px solid var(--line); border-radius: var(--radius-sm);">
+    <label style="display: flex; align-items: center; gap: 10px; font-weight: 700; cursor: pointer; color: var(--text-main);">
+      {{ form.headless }}
+      <span>{{ form.headless.label }}</span>
+    </label>
+    <span class="muted small" style="display: block; margin-top: 4px; padding-left: 24px;">
+      Untick this option to watch Playwright fill out the live web form in a visible Chrome window on your screen.
+    </span>
+  </div>
 
-  <p><label><b>{{ form.slow_mo.label }}</b><br>{{ form.slow_mo }}</label></p>
+  <div style="margin-bottom: 28px;">
+    <label style="display: block; font-weight: 700; margin-bottom: 6px; color: var(--text-main);">
+      {{ form.slow_mo.label }}
+    </label>
+    {{ form.slow_mo }}
+    <span class="muted small" style="display: block; margin-top: 6px;">
+      Adds artificial delay (in milliseconds) between form actions for visual debugging. (0 = max speed)
+    </span>
+  </div>
 
-  <div class="banner {% if cfg.allow_submit %}bad{% else %}warn{% endif %}">
-    <label><b>{{ form.allow_submit }} {{ form.allow_submit.label }}</b></label><br>
-    <span class="small">When off, the Submit button only runs a full check and nothing reaches Kobo.
-      When on, clicking Submit on a row sends it to the live form - only if every field filled without errors.</span>
+  <div class="banner {% if cfg.allow_submit %}bad{% else %}warn{% endif %}" style="padding: 20px; border-radius: var(--radius-md);">
+    <label style="display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; cursor: pointer; margin-bottom: 6px;">
+      {{ form.allow_submit }}
+      <span>{{ form.allow_submit.label }}</span>
+    </label>
+    <div class="small" style="line-height: 1.6; padding-left: 24px;">
+      <b>Safety Guard:</b> When turned <b>OFF</b>, clicking Submit on any row only runs a verification check—no data is sent to Kobo.
+      When turned <b>ON</b>, clicking Submit sends validated data straight to KoboToolbox.
+    </div>
     {% if cfg.env_locked %}
-      <br><span class="small"><b>Locked on this server:</b> submission also needs <code>KOBO_ALLOW_SUBMIT=1</code>
-        in the server's environment. It is not set, so nothing can be submitted even if this box is ticked.</span>
+      <div class="small" style="margin-top: 10px; padding: 10px 14px; background: rgba(0,0,0,0.04); border-radius: var(--radius-sm); border-left: 3px solid var(--bad);">
+        🔒 <b>Environment Lock Active:</b> Real submission also requires <code>KOBO_ALLOW_SUBMIT=1</code> in the server environment settings.
+      </div>
     {% endif %}
   </div>
 
-  <div class="row-actions full"><button class="btn primary">Save settings</button></div>
+  <div class="row-actions full" style="margin-top: 24px;">
+    <button class="btn primary" style="padding: 10px 24px; font-size: 15px;">
+      <svg style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2;" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Save Configuration
+    </button>
+  </div>
 </form>
 {% endblock %}

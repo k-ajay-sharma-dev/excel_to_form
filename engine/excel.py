@@ -245,7 +245,7 @@ def row_fields(df, mapping, r):
         value = clean_value(h, _cell(row, m["col"]))
         flags = [clean_value(h, _cell(row, j)) in ("1", "true", "True", "TRUE") for j in m["kid_cols"]]
         note, suggestion = "", ""
-        if m["alt_col"] is not None:
+        if m["alt_col"] is not None and m.get("off", 0) != 0:
             alt = clean_value(h, _cell(row, m["alt_col"]))
             if alt != value and (alt or value):
                 suggestion = alt

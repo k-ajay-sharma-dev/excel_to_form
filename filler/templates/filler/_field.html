@@ -1,28 +1,56 @@
 <div class="field">
   <div>
-    <label class="q" for="f_{{ f.pk }}">{{ f.question }}{% if f.instance %} <span class="muted">(entry {{ f.instance|add:1 }})</span>{% endif %}</label>
-    {% if f.changed %}<div class="meta">Excel said: {{ f.excel_value|default:"(empty)" }}</div>{% endif %}
-    {% if f.problem %}<div class="{% if f.status|slice:':6' == 'FAILED' or f.status|slice:':7' == 'SKIPPED' %}problem{% else %}note{% endif %}">{{ f.problem }}</div>{% endif %}
-    {% if f.status and not f.problem %}<div class="meta">{{ f.status }}</div>{% endif %}
+    <label class="q" for="f_{{ f.pk }}">
+      {{ f.question }}
+      {% if f.instance %}<span class="muted" style="font-weight: normal; font-size: 13px;">(Entry {{ f.instance|add:1 }})</span>{% endif %}
+    </label>
+    
+    {% if f.changed %}
+      <div class="meta" style="color: #475569; font-weight: 500;">
+        Excel value: <code style="background: #f1f5f9; padding: 1px 6px; border-radius: 4px; color: #0f172a;">{{ f.excel_value|default:"(empty)" }}</code>
+      </div>
+    {% endif %}
+    
+    {% if f.problem %}
+      <div class="{% if f.status|slice:':6' == 'FAILED' or f.status|slice:':7' == 'SKIPPED' %}problem{% else %}note{% endif %}">
+        {{ f.problem }}
+      </div>
+    {% endif %}
+    
+    {% if f.status and not f.problem %}
+      <div class="meta" style="color: var(--ok); font-weight: 600;">✓ {{ f.status }}</div>
+    {% endif %}
   </div>
+  
   <div>
     {% if f.choices and f.kind == "checkbox" %}
       <div class="checks" id="f_{{ f.pk }}">
-        {% for o in f.choices %}<label><input type="checkbox" name="f_{{ f.pk }}" value="{{ o.value }}" {% if o.selected %}checked{% endif %}><span>{{ o.label }}</span></label>{% endfor %}
+        {% for o in f.choices %}
+          <label>
+            <input type="checkbox" name="f_{{ f.pk }}" value="{{ o.value }}" {% if o.selected %}checked{% endif %}>
+            <span>{{ o.label }}</span>
+          </label>
+        {% endfor %}
       </div>
       <input type="hidden" name="f_{{ f.pk }}" value="">
     {% elif f.choices %}
       <select name="f_{{ f.pk }}" id="f_{{ f.pk }}">
-        <option value="">(leave empty)</option>
-        {% for o in f.choices %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}
+        <option value="">(Leave empty)</option>
+        {% for o in f.choices %}
+          <option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>
+        {% endfor %}
       </select>
     {% else %}
-      <input type="text" name="f_{{ f.pk }}" value="{{ f.value }}" id="f_{{ f.pk }}">
+      <input type="text" name="f_{{ f.pk }}" value="{{ f.value }}" id="f_{{ f.pk }}" placeholder="Enter answer value…">
     {% endif %}
+    
     {% if f.suggestion and not f.reviewed %}
-      <div class="suggest">Suggested: <b>{{ f.suggestion }}</b>
-        {% if not f.choices %}<button type="button" class="btn"
-          onclick="document.getElementById('f_{{ f.pk }}').value='{{ f.suggestion|escapejs }}'">Use it</button>{% endif %}
+      <div class="suggest">
+        <span>Suggested: <b>{{ f.suggestion }}</b></span>
+        <button type="button" class="btn" style="background: #ffffff; border-color: #cbd5e1;"
+          onclick="(function(){ var el = document.getElementById('f_{{ f.pk }}'); if (el) { el.value='{{ f.suggestion|escapejs }}'; el.dispatchEvent(new Event('change', {bubbles:true})); } })()">
+          Use Suggestion
+        </button>
       </div>
     {% endif %}
   </div>

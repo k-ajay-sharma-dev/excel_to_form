@@ -1,41 +1,91 @@
 {% extends "filler/base.html" %}
 {% block content %}
-<h1>Upload data</h1>
-<p class="sub">Upload the Kobo Excel/CSV export. Each row is filled into the form and checked; rows with problems are sent to you for review.</p>
+<div style="margin-bottom: 28px;">
+  <h1>Data Upload & Check Dashboard</h1>
+  <p class="sub">Upload your Kobo Excel or CSV export. Each record is validated against your live form structure; rows requiring attention are highlighted for quick review.</p>
+</div>
 
-<div class="card">
-  <form method="post" enctype="multipart/form-data" class="row-actions full">
-    {% csrf_token %}
-    <input type="file" name="file" accept=".xlsx,.xls,.csv" required>
-    <button class="btn primary">Upload &amp; check</button>
-  </form>
-  {% if form.errors %}<p class="banner bad small">{{ form.file.errors|join:" " }}</p>{% endif %}
-  <p class="muted small" style="margin:12px 0 0;overflow-wrap:anywhere">Form: {{ cfg.form_url }}</p>
+<div class="card" style="border: 2px dashed #cbd5e1; background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);">
+  <div style="text-align: center; padding: 12px 0 20px;">
+    <div style="width: 52px; height: 52px; background: #eef2ff; color: #4f46e5; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 12px; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);">
+      <svg style="width: 26px; height: 26px; stroke-width: 2.2; fill: none; stroke: currentColor;" viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+    <h2 style="font-size: 16px; margin: 0 0 4px;">Upload Excel or CSV Dataset</h2>
+    <p class="muted small" style="margin: 0 0 18px;">Supports <code>.xlsx</code>, <code>.xls</code>, and <code>.csv</code> files up to 20MB</p>
+    
+    <form method="post" enctype="multipart/form-data" class="row-actions full" style="justify-content: center; max-width: 500px; margin: 0 auto;">
+      {% csrf_token %}
+      <input type="file" name="file" accept=".xlsx,.xls,.csv" required style="border: 1px solid #cbd5e1; padding: 8px 12px; border-radius: 8px; background: #fff;">
+      <button class="btn primary">
+        <svg style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2;" viewBox="0 0 24 24"><path d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Upload &amp; Process
+      </button>
+    </form>
+  </div>
+  
+  {% if form.errors %}<p class="banner bad small" style="margin-top: 16px;">{{ form.file.errors|join:" " }}</p>{% endif %}
+  
+  <div style="border-top: 1px solid var(--line-subtle); margin-top: 16px; padding-top: 14px; text-align: center;" class="muted small">
+    Target Kobo Form: <code style="background: #f1f5f9; padding: 2px 8px; border-radius: 4px; color: #334155; font-size: 12px;">{{ cfg.form_url }}</code>
+  </div>
 </div>
 
 <div class="card">
-  <h2>Upload history</h2>
+  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+    <h2 style="margin: 0;">Upload History</h2>
+    <span class="muted small">Showing last {{ jobs|length }} upload(s)</span>
+  </div>
+  
   {% if jobs %}
   <table class="stack">
-    <tr class="head"><th>File</th><th>Uploaded</th><th>Rows</th><th>Results</th><th>Status</th><th></th></tr>
+    <tr class="head">
+      <th>File Name</th>
+      <th>Uploaded At</th>
+      <th>Rows</th>
+      <th>Validation Summary</th>
+      <th>Status</th>
+      <th style="text-align: right;">Action</th>
+    </tr>
     {% for j in jobs %}
     <tr>
-      <td><b style="overflow-wrap:anywhere">{{ j.name }}</b><div class="muted small">{{ j.size|filesizeformat }} · <a href="{% url 'job_file' j.pk %}">download</a></div></td>
-      <td class="muted small" data-label="Uploaded">{{ j.created|date:"d M Y, H:i" }}{% if j.finished %}<br>done {{ j.finished|date:"H:i" }}{% endif %}</td>
-      <td data-label="Rows">{{ j.n_rows }}{% if j.total_rows and j.total_rows != j.n_rows %} <span class="muted small">of {{ j.total_rows }}</span>{% endif %}</td>
+      <td>
+        <b style="font-size: 14px; color: var(--text-main); display: block; overflow-wrap: anywhere;">{{ j.name }}</b>
+        <div class="muted small" style="margin-top: 2px;">
+          {{ j.size|filesizeformat }} · <a href="{% url 'job_file' j.pk %}" style="font-size: 12px;">Download original</a>
+        </div>
+      </td>
+      <td class="muted small" data-label="Uploaded">
+        {{ j.created|date:"d M Y, H:i" }}
+        {% if j.finished %}<br><span style="color: var(--ok);">Done {{ j.finished|date:"H:i" }}</span>{% endif %}
+      </td>
+      <td data-label="Rows" style="font-weight: 600;">
+        {{ j.n_rows }}
+        {% if j.total_rows and j.total_rows != j.n_rows %}
+          <span class="muted small" style="font-weight: normal;">(of {{ j.total_rows }})</span>
+        {% endif %}
+      </td>
       <td class="small">
-        {% if j.n_submitted %}<span class="pill s-submitted">{{ j.n_submitted }} submitted</span> {% endif %}
-        {% if j.n_ready %}<span class="pill s-ready">{{ j.n_ready }} ready</span> {% endif %}
-        {% if j.n_review %}<span class="pill s-review">{{ j.n_review }} to review</span>{% endif %}
+        {% if j.n_submitted %}<span class="pill s-submitted">✓ {{ j.n_submitted }} submitted</span> {% endif %}
+        {% if j.n_ready %}<span class="pill s-ready">● {{ j.n_ready }} ready</span> {% endif %}
+        {% if j.n_review %}<span class="pill s-review">! {{ j.n_review }} to review</span>{% endif %}
       </td>
       <td><span class="pill s-{{ j.status }}">{{ j.get_status_display }}</span></td>
-      <td class="actions"><div class="row-actions" style="flex-wrap:nowrap">
-        <a class="btn" href="{% url 'job' j.pk %}">Open</a>
-        {% include "filler/_delete.html" %}
-      </div></td>
+      <td class="actions" style="text-align: right;">
+        <div class="row-actions" style="flex-wrap: nowrap; justify-content: flex-end;">
+          <a class="btn" href="{% url 'job' j.pk %}">
+            Open Job
+            <svg style="width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2;" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+          {% include "filler/_delete.html" %}
+        </div>
+      </td>
     </tr>
     {% endfor %}
   </table>
-  {% else %}<p class="muted">No uploads yet.</p>{% endif %}
+  {% else %}
+  <div style="text-align: center; padding: 32px 0;" class="muted">
+    <p style="margin: 0; font-size: 15px;">No files uploaded yet. Upload your first dataset above to get started.</p>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

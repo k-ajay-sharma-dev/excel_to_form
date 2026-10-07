@@ -171,18 +171,22 @@ def fill_question(page, q, value, flags=None):
     ).first
     if inp.count() == 0:
         return "FAILED: no input box found for this question", "text", []
+    val = value.strip() if value else ""
+    if not val:
+        return "left empty", "text", []
     if (inp.get_attribute("type") or "") == "number":
         try:
-            float(value)
+            float(val)
         except ValueError:
-            return f"FAILED: '{value}' is text but this question needs a number", "text", []
-    inp.fill(value, timeout=5000)
+            return f"FAILED: '{val}' is text but this question needs a number", "text", []
+    inp.fill(val, timeout=5000)
     inp.press("Tab")  # blur so Enketo validates / updates skip logic
     return "filled (text)", "text", []
 
 
 def _fill_field(page, f):
-    if not f["value"] and not any(f.get("flags") or []):
+    val = (f.get("value") or "").strip()
+    if not val and not any(f.get("flags") or []):
         return "left empty", None, []
     q = find_question(page, f["question"], f.get("instance", 0))
     if q is None:

@@ -3,103 +3,368 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Kobo Form Filler{% endblock %}</title>
+<title>{% block title %}Kobo Form Automation Suite{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
-    --accent: #2f6fde; --ok: #1e8a4c; --ok-bg: #e7f6ed; --warn: #b4580b; --warn-bg: #fff3e5;
-    --bad: #c2312f; --bad-bg: #fdecec; --info-bg: #eaf1fd;
+    --bg: #f8fafc;
+    --card: #ffffff;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --line: #e2e8f0;
+    --line-subtle: #f1f5f9;
+    
+    --primary: #4f46e5;
+    --primary-hover: #4338ca;
+    --primary-light: #eeef2f;
+    --primary-bg: #eef2ff;
+    
+    --ok: #059669;
+    --ok-bg: #ecfdf5;
+    --ok-border: #a7f3d0;
+    
+    --warn: #d97706;
+    --warn-bg: #fffbeb;
+    --warn-border: #fde68a;
+    
+    --bad: #dc2626;
+    --bad-bg: #fef2f2;
+    --bad-border: #fecaca;
+    
+    --info-bg: #eff6ff;
+    --info-border: #bfdbfe;
+    
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.07);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
   }
+  
   * { box-sizing: border-box; }
-  html { -webkit-text-size-adjust: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden;
-         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { background: #1d2330; color: #fff; position: sticky; top: 0; z-index: 10; }
-  header .wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 24px; padding-top: 12px; padding-bottom: 12px; }
-  header b { font-size: 16px; }
-  header nav { display: flex; gap: 16px; flex-wrap: wrap; }
-  header nav a { color: #c9d1e0; text-decoration: none; padding: 4px 0; }
-  header nav a.on, header nav a:hover { color: #fff; }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
-  main { padding: 24px 0 48px; }
-  h1 { font-size: 22px; margin: 0 0 4px; overflow-wrap: anywhere; }
-  h2 { font-size: 17px; margin: 0 0 12px; }
-  .sub { color: var(--muted); margin: 0 0 20px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
-  a { color: var(--accent); }
-  .btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line);
-         background: #fff; color: var(--text); padding: 8px 16px; border-radius: 8px; font: inherit;
-         cursor: pointer; text-decoration: none; min-height: 40px; }
-  .btn:hover { border-color: #b8c0cc; }
-  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  .btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 13px; white-space: nowrap; }
-  .s-ready, .s-submitted, .s-done { background: var(--ok-bg); color: var(--ok); }
-  .s-review, .s-dry_run { background: var(--warn-bg); color: var(--warn); }
-  .s-submit_failed, .s-error { background: var(--bad-bg); color: var(--bad); }
-  .s-pending, .s-filling, .s-submitting, .s-queued, .s-processing { background: var(--info-bg); color: var(--accent); }
-  .banner { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; overflow-wrap: anywhere; }
-  .banner.warn { background: var(--warn-bg); color: var(--warn); }
-  .banner.bad { background: var(--bad-bg); color: var(--bad); }
-  .banner.ok { background: var(--ok-bg); color: var(--ok); }
-  .banner.info { background: var(--info-bg); color: var(--accent); }
-  .muted { color: var(--muted); }
+  html { -webkit-text-size-adjust: 100%; font-size: 15px; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text-main);
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  
+  /* Header Nav */
+  header {
+    background: #0f172a;
+    color: #ffffff;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.25);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  header .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+  .brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+    text-decoration: none;
+  }
+  .brand-icon {
+    width: 34px;
+    height: 34px;
+    background: linear-gradient(135deg, #6366f1, #4f46e5);
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+  }
+  .brand-icon svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2.2; }
+  
+  header nav { display: flex; gap: 8px; }
+  header nav a {
+    color: #94a3b8;
+    text-decoration: none;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.15s ease;
+  }
+  header nav a:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+  header nav a.on { color: #ffffff; background: rgba(99, 102, 241, 0.25); border: 1px solid rgba(99, 102, 241, 0.4); }
+  
+  /* Main Container */
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 20px; }
+  main { padding: 32px 0 64px; }
+  
+  h1 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin: 0 0 6px;
+    color: var(--text-main);
+  }
+  h2 {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 16px;
+    color: var(--text-main);
+  }
+  .sub {
+    color: var(--text-muted);
+    font-size: 14px;
+    margin: 0 0 24px;
+    line-height: 1.6;
+  }
+  
+  /* Cards */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    padding: 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s ease;
+  }
+  .card:hover { box-shadow: var(--shadow-md); }
+  
+  /* Data Tables */
+  table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  th, td {
+    text-align: left;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  th {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    font-weight: 700;
+    background: var(--line-subtle);
+  }
+  tr:first-child th:first-child { border-top-left-radius: var(--radius-sm); }
+  tr:first-child th:last-child { border-top-right-radius: var(--radius-sm); }
+  tr:last-child td { border-bottom: 0; }
+  tbody tr { transition: background-color 0.15s ease; }
+  tbody tr:hover { background-color: #f8fafc; }
+  
+  a { color: var(--primary); text-decoration: none; font-weight: 600; }
+  a:hover { text-decoration: underline; }
+  
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--line);
+    background: #ffffff;
+    color: var(--text-main);
+    padding: 9px 18px;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    min-height: 42px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.15s ease-in-out;
+  }
+  .btn:hover {
+    border-color: #cbd5e1;
+    background: #f8fafc;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+  }
+  .btn:active { transform: translateY(0); }
+  .btn.primary {
+    background: linear-gradient(135deg, #4f46e5, #4338ca);
+    border-color: #4338ca;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(79, 70, 229, 0.3);
+  }
+  .btn.primary:hover {
+    background: linear-gradient(135deg, #4338ca, #3730a3);
+    border-color: #3730a3;
+    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+  }
+  .btn.danger {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    border-color: #b91c1c;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(220, 38, 38, 0.25);
+  }
+  .btn.danger:hover {
+    background: linear-gradient(135deg, #b91c1c, #991b1b);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.35);
+  }
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Status Pills */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+  }
+  .s-ready, .s-submitted, .s-done {
+    background: var(--ok-bg);
+    color: var(--ok);
+    border: 1px solid var(--ok-border);
+  }
+  .s-review, .s-dry_run {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border: 1px solid var(--warn-border);
+  }
+  .s-submit_failed, .s-error {
+    background: var(--bad-bg);
+    color: var(--bad);
+    border: 1px solid var(--bad-border);
+  }
+  .s-pending, .s-filling, .s-submitting, .s-queued, .s-processing {
+    background: var(--info-bg);
+    color: var(--primary);
+    border: 1px solid var(--info-border);
+  }
+  
+  /* Banners */
+  .banner {
+    padding: 14px 18px;
+    border-radius: var(--radius-sm);
+    margin-bottom: 24px;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    border: 1px solid transparent;
+  }
+  .banner.warn { background: var(--warn-bg); color: #92400e; border-color: var(--warn-border); }
+  .banner.bad { background: var(--bad-bg); color: #991b1b; border-color: var(--bad-border); }
+  .banner.ok { background: var(--ok-bg); color: #065f46; border-color: var(--ok-border); }
+  .banner.info { background: var(--info-bg); color: #1e40af; border-color: var(--info-border); }
+  
+  .muted { color: var(--text-muted); }
   .small { font-size: 13px; }
+  
+  /* Inputs */
   input[type=text], input[type=url], input[type=number], select, textarea {
-    width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit;
-    font-size: 16px; /* 16px stops phones from zooming in on focus */ background: #fff; min-height: 42px; }
-  input[type=file] { max-width: 100%; }
-  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; margin: 0; font-family: inherit; }
-  .row-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent;
-             border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 6px; }
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    font-size: 14px;
+    background: #ffffff;
+    min-height: 42px;
+    color: var(--text-main);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  input[type=text]:focus, input[type=url]:focus, input[type=number]:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+  }
+  input[type=file] {
+    max-width: 100%;
+    padding: 8px 0;
+    font-size: 14px;
+  }
+  
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; margin: 0; font-family: ui-monospace, SFMono-Regular, monospace; }
+  .row-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  
+  /* Spinners */
+  .spinner {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: -2px;
+    margin-right: 4px;
+  }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* phones: tables marked .stack turn into one card per row, labels taken from data-label */
+  /* Responsive Media Queries */
   @media (max-width: 700px) {
-    main { padding: 16px 0 40px; }
-    h1 { font-size: 19px; }
-    .card { padding: 14px; margin-bottom: 14px; }
+    main { padding: 20px 0 40px; }
+    h1 { font-size: 22px; }
+    .card { padding: 16px; margin-bottom: 16px; }
     .hide-sm { display: none !important; }
     table.stack thead, table.stack tr.head { display: none; }
     table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
-    table.stack tr { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
-    table.stack td { border: 0; padding: 3px 0; }
-    table.stack td[data-label]::before { content: attr(data-label); display: block; font-size: 11px;
-      text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
-    table.stack td.actions { padding-top: 8px; }
+    table.stack tr { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 12px; background: #fff; }
+    table.stack td { border: 0; padding: 6px 0; }
+    table.stack td[data-label]::before { content: attr(data-label); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 700; }
+    table.stack td.actions { padding-top: 10px; border-top: 1px solid var(--line-subtle); margin-top: 6px; }
     .row-actions.full > *, .row-actions.full form, .row-actions.full .btn { flex: 1 1 100%; width: 100%; }
   }
 </style>
 {% block head %}{% endblock %}
 </head>
 <body>
-<header><div class="wrap">
-  <b>Kobo Form Filler</b>
-  <nav>
-    <a href="{% url 'upload' %}" class="{% if request.resolver_match.url_name != 'settings' %}on{% endif %}">Upload &amp; results</a>
-    <a href="{% url 'settings' %}" class="{% if request.resolver_match.url_name == 'settings' %}on{% endif %}">Settings</a>
-  </nav>
-</div></header>
-<main><div class="wrap">
-  {% if not cfg.submit_enabled %}
-    <div class="banner info small">Safe mode: real submission is <b>off</b>. Nothing is ever sent to Kobo. Change this in <a href="{% url 'settings' %}">Settings</a>.</div>
-  {% endif %}
-  {% for m in messages %}<div class="banner {% if m.tags == 'success' %}ok{% else %}info{% endif %}">{{ m }}</div>{% endfor %}
-  {% block content %}{% endblock %}
-</div></main>
+<header>
+  <div class="wrap">
+    <a href="{% url 'upload' %}" class="brand-logo">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <span>Kobo Form Filler</span>
+    </a>
+    <nav>
+      <a href="{% url 'upload' %}" class="{% if request.resolver_match.url_name != 'settings' %}on{% endif %}">Upload &amp; Results</a>
+      <a href="{% url 'settings' %}" class="{% if request.resolver_match.url_name == 'settings' %}on{% endif %}">Settings</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    {% if not cfg.submit_enabled %}
+      <div class="banner info small">
+        ⚡ <b>Safe Mode Active:</b> Real submission is currently turned <b>OFF</b>. Nothing is sent to Kobo. You can unlock submission in <a href="{% url 'settings' %}">Settings</a>.
+      </div>
+    {% endif %}
+    {% for m in messages %}
+      <div class="banner {% if m.tags == 'success' %}ok{% else %}info{% endif %}">{{ m }}</div>
+    {% endfor %}
+    {% block content %}{% endblock %}
+  </div>
+</main>
 
 <script>
-/*
- * Live updates without disturbing the reader. Pages that are waiting for the background browser
- * set data-poll="<status url>" and data-sig="<current state>" on <body>-level #live. We ask the
- * server every 3 s and reload only when the state really changed; the scroll position and the
- * open/closed state of every <details> are kept across that reload.
- */
 (function () {
   var KEY = "view:" + location.pathname;
   function save() {
@@ -119,7 +384,6 @@
       window.scrollTo(0, s.y || 0);
     }
   }
-  // remember details state whenever the user opens/closes one, and before leaving the page
   document.addEventListener("toggle", save, true);
   window.addEventListener("pagehide", save);
   restore();

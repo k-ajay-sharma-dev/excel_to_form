@@ -2,50 +2,102 @@
 {% block content %}
 <div id="live" {% if job.busy %}data-poll="{% url 'job_status' job.pk %}"{% endif %} data-sig="{{ sig }}"></div>
 
-<p class="small"><a href="{% url 'upload' %}">&larr; All uploads</a></p>
-<div class="row-actions" style="justify-content:space-between;margin-bottom:4px">
-  <h1>{{ job.name }}</h1>
-  <span class="row-actions"><a class="btn" href="{% url 'job_file' job.pk %}">Download file</a>
-    {% with j=job %}{% include "filler/_delete.html" %}{% endwith %}</span>
+<div style="margin-bottom: 20px;">
+  <p class="small" style="margin-bottom: 8px;">
+    <a href="{% url 'upload' %}" style="display: inline-flex; align-items: center; gap: 4px;">
+      <svg style="width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.5;" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      All Uploads
+    </a>
+  </p>
+  <div class="row-actions" style="justify-content: space-between; align-items: center;">
+    <h1 style="margin: 0; word-break: break-word;">{{ job.name }}</h1>
+    <div class="row-actions">
+      <a class="btn" href="{% url 'job_file' job.pk %}">
+        <svg style="width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2;" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Download File
+      </a>
+      {% with j=job %}{% include "filler/_delete.html" %}{% endwith %}
+    </div>
+  </div>
+  <p class="sub" style="margin-top: 8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+    <span class="pill s-{{ job.status }}">{% if job.busy %}<span class="spinner"></span>{% endif %}{{ job.get_status_display }}</span>
+    <span>{{ job.message|truncatechars:120 }}</span>
+    {% if job.busy %}<span class="muted small">• Live updating as browser validates rows</span>{% endif %}
+  </p>
 </div>
-<p class="sub">
-  <span class="pill s-{{ job.status }}">{% if job.busy %}<span class="spinner"></span>{% endif %}{{ job.get_status_display }}</span>
-  {{ job.message|truncatechars:120 }}
-  {% if job.busy %}<span class="muted small"> - updates by itself as rows finish</span>{% endif %}
-</p>
 
-{% if job.status == "error" %}<div class="banner bad"><pre>{{ job.message }}</pre></div>{% endif %}
+{% if job.status == "error" %}
+<div class="banner bad"><pre>{{ job.message }}</pre></div>
+{% endif %}
 
 {% if counts %}
-<div class="card row-actions full">
-  <div class="row-actions">{% for k, v in counts.items %}<span><b>{{ v }}</b> {{ k }}</span>{% endfor %}</div>
-  <span style="flex:1"></span>
-  <form method="post">{% csrf_token %}
-    <input type="hidden" name="action" value="submit_ready">
-    <button class="btn primary" {% if not n_ready %}disabled{% endif %}
-      onclick="return confirm('{% if cfg.submit_enabled %}Submit {{ n_ready }} ready row(s) to the LIVE Kobo form?{% else %}Run the submit check on {{ n_ready }} row(s)? (Submission is off - nothing will be sent.){% endif %}')">
-      Submit all ready rows ({{ n_ready }})</button>
-  </form>
+<div class="card" style="background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);">
+  <div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; gap: 24px; flex-wrap: wrap; align-items: center;">
+      {% for k, v in counts.items %}
+      <div style="display: flex; flex-direction: column;">
+        <span style="font-size: 22px; font-weight: 800; color: var(--text-main); line-height: 1.2;">{{ v }}</span>
+        <span class="muted small" style="text-transform: capitalize; font-weight: 600;">{{ k }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    
+    <div>
+      <form method="post">{% csrf_token %}
+        <input type="hidden" name="action" value="submit_ready">
+        <button class="btn primary" {% if not n_ready %}disabled{% endif %}
+          onclick="return confirm('{% if cfg.submit_enabled %}Submit {{ n_ready }} ready row(s) to the LIVE Kobo form?{% else %}Run the submit check on {{ n_ready }} row(s)? (Submission is off - nothing will be sent.){% endif %}')">
+          <svg style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2;" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Submit All Ready Rows ({{ n_ready }})
+        </button>
+      </form>
+    </div>
+  </div>
 </div>
 {% endif %}
 
-<div class="card">
+<div class="card" style="padding: 0; overflow: hidden;">
   <table class="stack">
-    <tr class="head"><th>#</th><th>Beneficiary</th><th>Status</th><th>Details</th><th></th></tr>
-    {% for r in rows %}
-    <tr>
-      <td data-label="Row">{{ r.row_no|add:1 }}</td>
-      <td data-label="Beneficiary"><b>{{ r.title }}</b></td>
-      <td><span class="pill s-{{ r.status }}">{% if r.busy and r.status != "pending" %}<span class="spinner"></span>{% endif %}{{ r.get_status_display }}</span></td>
-      <td class="small">
-        {% if r.n_flagged %}<b>{{ r.n_flagged }}</b> field(s) to review. {% endif %}
-        <span class="muted">{{ r.message|truncatechars:110 }}</span>
-      </td>
-      <td class="actions"><a class="btn" href="{% url 'row' r.pk %}">{% if r.status == "review" %}Review{% else %}Open{% endif %}</a></td>
-    </tr>
-    {% empty %}
-    <tr><td colspan="5" class="muted">Reading the file…</td></tr>
-    {% endfor %}
+    <thead>
+      <tr class="head">
+        <th style="width: 60px;">#</th>
+        <th>Beneficiary / Record</th>
+        <th>Status</th>
+        <th>Validation Details</th>
+        <th style="text-align: right;">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td data-label="Row" style="font-weight: 700; color: var(--text-muted);">{{ r.row_no|add:1 }}</td>
+        <td data-label="Beneficiary"><b style="font-size: 15px; color: var(--text-main);">{{ r.title }}</b></td>
+        <td>
+          <span class="pill s-{{ r.status }}">
+            {% if r.busy and r.status != "pending" %}<span class="spinner"></span>{% endif %}
+            {{ r.get_status_display }}
+          </span>
+        </td>
+        <td class="small">
+          {% if r.n_flagged %}
+            <span style="color: var(--warn); font-weight: 700;">⚠ {{ r.n_flagged }} field(s) to review.</span> 
+          {% endif %}
+          <span class="muted">{{ r.message|truncatechars:110 }}</span>
+        </td>
+        <td class="actions" style="text-align: right;">
+          <a class="btn {% if r.status == 'review' %}primary{% endif %}" href="{% url 'row' r.pk %}">
+            {% if r.status == "review" %}Review Row{% else %}View Details{% endif %}
+          </a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="5" class="muted" style="text-align: center; padding: 36px 16px;">
+          Reading and parsing file records…
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
   </table>
 </div>
 {% endblock %}
