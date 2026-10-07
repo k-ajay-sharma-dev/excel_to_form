@@ -1,0 +1,5 @@
+Django==6.1.2
+pandas==3.0.6
+openpyxl==3.1.5
+playwright==1.63.0
+gunicorn==23.0.0

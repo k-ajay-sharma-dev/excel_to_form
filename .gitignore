@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+db.sqlite3
+media/
+kobo_output/
+.claude/
+# data files stay off GitHub (they contain beneficiary names and phone numbers)
+*.xlsx
+*.xls
+*.csv

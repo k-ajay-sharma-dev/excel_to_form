@@ -1,0 +1,9 @@
+.git
+.claude
+__pycache__/
+*.pyc
+db.sqlite3
+media/
+kobo_output/
+*.xlsx
+*.csv
