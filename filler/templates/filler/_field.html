@@ -1,0 +1,29 @@
+<tr>
+  <td>
+    <div class="q">{{ f.question }}{% if f.instance %} <span class="muted">(entry {{ f.instance|add:1 }})</span>{% endif %}</div>
+    {% if f.excel_value != f.value %}<div class="muted small">Excel: {{ f.excel_value|default:"(empty)" }}</div>{% endif %}
+    {% if f.problem %}<div class="{% if f.status|slice:':6' == 'FAILED' or f.status|slice:':7' == 'SKIPPED' %}problem{% else %}note{% endif %}">{{ f.problem }}</div>{% endif %}
+    {% if f.status and not f.problem %}<div class="muted small">{{ f.status }}</div>{% endif %}
+  </td>
+  <td class="val">
+    {% if f.choices and f.kind == "checkbox" %}
+      <div class="checks">
+        {% for o in f.choices %}<label><input type="checkbox" name="f_{{ f.pk }}" value="{{ o.value }}" {% if o.selected %}checked{% endif %}> {{ o.label }}</label>{% endfor %}
+      </div>
+      <input type="hidden" name="f_{{ f.pk }}" value="">
+    {% elif f.choices %}
+      <select name="f_{{ f.pk }}">
+        <option value="">(leave empty)</option>
+        {% for o in f.choices %}<option value="{{ o.value }}" {% if o.selected %}selected{% endif %}>{{ o.label }}</option>{% endfor %}
+      </select>
+    {% else %}
+      <input type="text" name="f_{{ f.pk }}" value="{{ f.value }}" id="f_{{ f.pk }}">
+    {% endif %}
+    {% if f.suggestion and not f.reviewed %}
+      <div class="small" style="margin-top:6px">Suggested from the shifted column: <b>{{ f.suggestion }}</b>
+        {% if not f.choices %}<button type="button" class="btn small" style="padding:2px 8px"
+          onclick="document.getElementById('f_{{ f.pk }}').value='{{ f.suggestion|escapejs }}'">Use it</button>{% endif %}
+      </div>
+    {% endif %}
+  </td>
+</tr>

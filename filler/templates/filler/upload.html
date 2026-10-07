@@ -1,0 +1,32 @@
+{% extends "filler/base.html" %}
+{% block content %}
+<h1>Upload data</h1>
+<p class="sub">Upload the Kobo Excel/CSV export. Each row is filled into the form and checked; rows with problems are sent to you for review.</p>
+
+<div class="card">
+  <form method="post" enctype="multipart/form-data" class="row-actions">
+    {% csrf_token %}
+    <input type="file" name="file" accept=".xlsx,.xls,.csv" required>
+    <button class="btn primary">Upload &amp; check</button>
+  </form>
+  {% if form.errors %}<p class="banner bad small">{{ form.file.errors|join:" " }}</p>{% endif %}
+  <p class="muted small" style="margin:12px 0 0">Form: {{ cfg.form_url }}</p>
+</div>
+
+<div class="card">
+  <h2>Recent uploads</h2>
+  {% if jobs %}
+  <table>
+    <tr><th>File</th><th class="hide-sm">Uploaded</th><th>Status</th><th></th></tr>
+    {% for j in jobs %}
+    <tr>
+      <td>{{ j.name }}</td>
+      <td class="hide-sm muted">{{ j.created|date:"d M Y, H:i" }}</td>
+      <td><span class="pill s-{{ j.status }}">{{ j.get_status_display }}</span></td>
+      <td><a href="{% url 'job' j.pk %}">Open</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% else %}<p class="muted">No uploads yet.</p>{% endif %}
+</div>
+{% endblock %}

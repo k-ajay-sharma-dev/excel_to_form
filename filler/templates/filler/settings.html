@@ -1,0 +1,29 @@
+{% extends "filler/base.html" %}
+{% block content %}
+<h1>Settings</h1>
+<p class="sub">Which form to fill and how the browser runs.</p>
+
+<form method="post" class="card">
+  {% csrf_token %}
+  <p><label><b>{{ form.form_url.label }}</b><br>{{ form.form_url }}</label>
+     <span class="muted small">The Enketo link, for example https://ee-eu.kobotoolbox.org/x/XXXXXXXX</span></p>
+  {% if form.form_url.errors %}<p class="banner bad small">{{ form.form_url.errors|join:" " }}</p>{% endif %}
+
+  <p><label>{{ form.headless }} {{ form.headless.label }}</label><br>
+     <span class="muted small">Untick to watch the browser fill the form (on the computer running this app).</span></p>
+
+  <p><label><b>{{ form.slow_mo.label }}</b><br>{{ form.slow_mo }}</label></p>
+
+  <div class="banner {% if cfg.allow_submit %}bad{% else %}warn{% endif %}">
+    <label><b>{{ form.allow_submit }} {{ form.allow_submit.label }}</b></label><br>
+    <span class="small">When off, the Submit button only runs a full check and nothing reaches Kobo.
+      When on, clicking Submit on a row sends it to the live form - only if every field filled without errors.</span>
+    {% if cfg.env_locked %}
+      <br><span class="small"><b>Locked on this server:</b> submission also needs <code>KOBO_ALLOW_SUBMIT=1</code>
+        in the server's environment. It is not set, so nothing can be submitted even if this box is ticked.</span>
+    {% endif %}
+  </div>
+
+  <button class="btn primary">Save settings</button>
+</form>
+{% endblock %}

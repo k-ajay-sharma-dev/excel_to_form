@@ -1,0 +1,67 @@
+{% extends "filler/base.html" %}
+{% block head %}{% if row.busy %}<meta http-equiv="refresh" content="3">{% endif %}
+<style>
+  .q { font-weight: 600; }
+  .problem { color: var(--bad); font-size: 13px; margin-top: 4px; }
+  .note { color: var(--warn); font-size: 13px; margin-top: 4px; }
+  .checks label { display: block; font-size: 14px; }
+  td.val { width: 42%; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .shot img { max-width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<p class="small"><a href="{% url 'job' row.job_id %}">&larr; {{ row.job.name }}</a>
+  {% if prev %} · <a href="{% url 'row' prev %}">Previous row</a>{% endif %}
+  {% if next %} · <a href="{% url 'row' next %}">Next row</a>{% endif %}</p>
+<h1>Row {{ row.row_no|add:1 }} - {{ row.title }}</h1>
+<p class="sub"><span class="pill s-{{ row.status }}">{{ row.get_status_display }}</span>
+  {% if row.busy %}<span class="muted small"> Working in the browser - this page refreshes by itself…</span>{% endif %}</p>
+
+{% if row.message %}
+<div class="banner {% if row.status == 'submitted' or row.status == 'ready' %}ok{% elif row.status == 'submit_failed' or row.status == 'error' %}bad{% else %}warn{% endif %}"><pre>{{ row.message }}</pre></div>
+{% endif %}
+
+<form method="post">
+  {% csrf_token %}
+  <div class="card">
+    <h2>{% if flagged %}Please review these {{ flagged|length }} field(s){% else %}Nothing needs review{% endif %}</h2>
+    {% if flagged %}
+    <p class="muted small" style="margin-top:-6px">Fix the value, or clear it to leave the question empty. Your answer replaces the Excel value.</p>
+    <table>
+      <tr><th>Question</th><th>Value to fill</th></tr>
+      {% for f in flagged %}{% include "filler/_field.html" %}{% endfor %}
+    </table>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>All other fields ({{ others|length }}) - filled fine, editable if needed</summary>
+      <table style="margin-top:12px">
+        <tr><th>Question</th><th>Value to fill</th></tr>
+        {% for f in others %}{% include "filler/_field.html" %}{% endfor %}
+      </table>
+    </details>
+  </div>
+
+  <div class="card row-actions">
+    <button class="btn" name="action" value="check" {% if row.busy or row.status == 'submitted' %}disabled{% endif %}>Save &amp; check again</button>
+    {% if cfg.submit_enabled %}
+      <button class="btn danger" name="action" value="submit" {% if row.busy or row.status == 'submitted' %}disabled{% endif %}
+        onclick="return confirm('Submit this row to the LIVE Kobo form? This cannot be undone.')">Save &amp; submit to Kobo</button>
+    {% else %}
+      <button class="btn primary" name="action" value="submit" {% if row.busy or row.status == 'submitted' %}disabled{% endif %}>Save &amp; submit (check only - submission is off)</button>
+    {% endif %}
+    <span class="muted small">It is only submitted if every field fills without an error.</span>
+  </div>
+</form>
+
+{% if row.screenshot %}
+<div class="card shot">
+  <h2>Form as filled in the last run</h2>
+  <a href="/media/{{ row.screenshot }}" target="_blank"><img src="/media/{{ row.screenshot }}?v={% now 'U' %}" alt="Screenshot of the filled form"></a>
+</div>
+{% endif %}
+{% endblock %}

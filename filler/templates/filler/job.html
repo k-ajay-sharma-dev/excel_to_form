@@ -1,0 +1,46 @@
+{% extends "filler/base.html" %}
+{% block head %}{% if job.busy %}<meta http-equiv="refresh" content="4">{% endif %}{% endblock %}
+{% block content %}
+<p class="small"><a href="{% url 'upload' %}">&larr; All uploads</a></p>
+<h1>{{ job.name }}</h1>
+<p class="sub">
+  <span class="pill s-{{ job.status }}">{{ job.get_status_display }}</span>
+  {{ job.message|truncatechars:120 }}
+  {% if job.busy %}<span class="muted small"> - updating automatically…</span>{% endif %}
+</p>
+
+{% if job.status == "error" %}<div class="banner bad"><pre>{{ job.message }}</pre></div>{% endif %}
+
+{% if counts %}
+<div class="card row-actions">
+  {% for k, v in counts.items %}<span><b>{{ v }}</b> {{ k }}</span>{% endfor %}
+  <span style="flex:1"></span>
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="action" value="submit_ready">
+    <button class="btn primary" {% if not n_ready %}disabled{% endif %}
+      onclick="return confirm('{% if cfg.submit_enabled %}Submit {{ n_ready }} ready row(s) to the LIVE Kobo form?{% else %}Run the submit check on {{ n_ready }} row(s)? (Submission is off - nothing will be sent.){% endif %}')">
+      Submit all ready rows ({{ n_ready }})</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <table>
+    <tr><th>#</th><th>Beneficiary</th><th>Status</th><th class="hide-sm">Details</th><th></th></tr>
+    {% for r in rows %}
+    <tr>
+      <td>{{ r.row_no|add:1 }}</td>
+      <td>{{ r.title }}</td>
+      <td><span class="pill s-{{ r.status }}">{{ r.get_status_display }}</span></td>
+      <td class="hide-sm small">
+        {% if r.n_flagged %}<b>{{ r.n_flagged }}</b> field(s) to review. {% endif %}
+        <span class="muted">{{ r.message|truncatechars:110 }}</span>
+      </td>
+      <td><a class="btn" href="{% url 'row' r.pk %}">{% if r.status == "review" %}Review{% else %}Open{% endif %}</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="muted">Reading the file…</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
