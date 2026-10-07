@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Kobo Form Filler{% endblock %}</title>
-{% block head %}{% endblock %}
 <style>
   :root {
     --bg: #f6f7f9; --card: #fff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
@@ -12,16 +11,18 @@
     --bad: #c2312f; --bad-bg: #fdecec; --info-bg: #eaf1fd;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text); overflow-x: hidden;
          font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  header { background: #1d2330; color: #fff; }
-  header .wrap { display: flex; align-items: center; gap: 24px; padding-top: 12px; padding-bottom: 12px; }
+  header { background: #1d2330; color: #fff; position: sticky; top: 0; z-index: 10; }
+  header .wrap { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 24px; padding-top: 12px; padding-bottom: 12px; }
   header b { font-size: 16px; }
-  header nav a { color: #c9d1e0; text-decoration: none; margin-right: 16px; }
+  header nav { display: flex; gap: 16px; flex-wrap: wrap; }
+  header nav a { color: #c9d1e0; text-decoration: none; padding: 4px 0; }
   header nav a.on, header nav a:hover { color: #fff; }
   .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
   main { padding: 24px 0 48px; }
-  h1 { font-size: 22px; margin: 0 0 4px; }
+  h1 { font-size: 22px; margin: 0 0 4px; overflow-wrap: anywhere; }
   h2 { font-size: 17px; margin: 0 0 12px; }
   .sub { color: var(--muted); margin: 0 0 20px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 20px; margin-bottom: 20px; }
@@ -29,8 +30,9 @@
   th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
   a { color: var(--accent); }
-  .btn { display: inline-block; border: 1px solid var(--line); background: #fff; color: var(--text);
-         padding: 8px 16px; border-radius: 8px; font: inherit; cursor: pointer; text-decoration: none; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--line);
+         background: #fff; color: var(--text); padding: 8px 16px; border-radius: 8px; font: inherit;
+         cursor: pointer; text-decoration: none; min-height: 40px; }
   .btn:hover { border-color: #b8c0cc; }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   .btn.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
@@ -40,7 +42,7 @@
   .s-review, .s-dry_run { background: var(--warn-bg); color: var(--warn); }
   .s-submit_failed, .s-error { background: var(--bad-bg); color: var(--bad); }
   .s-pending, .s-filling, .s-submitting, .s-queued, .s-processing { background: var(--info-bg); color: var(--accent); }
-  .banner { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; }
+  .banner { padding: 12px 16px; border-radius: 8px; margin-bottom: 20px; overflow-wrap: anywhere; }
   .banner.warn { background: var(--warn-bg); color: var(--warn); }
   .banner.bad { background: var(--bad-bg); color: var(--bad); }
   .banner.ok { background: var(--ok-bg); color: var(--ok); }
@@ -48,11 +50,32 @@
   .muted { color: var(--muted); }
   .small { font-size: 13px; }
   input[type=text], input[type=url], input[type=number], select, textarea {
-    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; }
-  pre { white-space: pre-wrap; font-size: 13px; margin: 0; }
+    width: 100%; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; font: inherit;
+    font-size: 16px; /* 16px stops phones from zooming in on focus */ background: #fff; min-height: 42px; }
+  input[type=file] { max-width: 100%; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; margin: 0; font-family: inherit; }
   .row-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-  @media (max-width: 700px) { th.hide-sm, td.hide-sm { display: none; } }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent;
+             border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -1px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* phones: tables marked .stack turn into one card per row, labels taken from data-label */
+  @media (max-width: 700px) {
+    main { padding: 16px 0 40px; }
+    h1 { font-size: 19px; }
+    .card { padding: 14px; margin-bottom: 14px; }
+    .hide-sm { display: none !important; }
+    table.stack thead, table.stack tr.head { display: none; }
+    table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; width: 100%; }
+    table.stack tr { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+    table.stack td { border: 0; padding: 3px 0; }
+    table.stack td[data-label]::before { content: attr(data-label); display: block; font-size: 11px;
+      text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    table.stack td.actions { padding-top: 8px; }
+    .row-actions.full > *, .row-actions.full form, .row-actions.full .btn { flex: 1 1 100%; width: 100%; }
+  }
 </style>
+{% block head %}{% endblock %}
 </head>
 <body>
 <header><div class="wrap">
@@ -69,5 +92,52 @@
   {% for m in messages %}<div class="banner {% if m.tags == 'success' %}ok{% else %}info{% endif %}">{{ m }}</div>{% endfor %}
   {% block content %}{% endblock %}
 </div></main>
+
+<script>
+/*
+ * Live updates without disturbing the reader. Pages that are waiting for the background browser
+ * set data-poll="<status url>" and data-sig="<current state>" on <body>-level #live. We ask the
+ * server every 3 s and reload only when the state really changed; the scroll position and the
+ * open/closed state of every <details> are kept across that reload.
+ */
+(function () {
+  var KEY = "view:" + location.pathname;
+  function save() {
+    try {
+      var open = [].map.call(document.querySelectorAll("details[id]"), function (d) { return d.id + "=" + (d.open ? 1 : 0); });
+      sessionStorage.setItem(KEY, JSON.stringify({ y: window.scrollY, open: open }));
+    } catch (e) {}
+  }
+  function restore() {
+    var s = null;
+    try { s = JSON.parse(sessionStorage.getItem(KEY) || "null"); } catch (e) {}
+    if (s) {
+      (s.open || []).forEach(function (kv) {
+        var p = kv.split("="), d = document.getElementById(p[0]);
+        if (d) d.open = p[1] === "1";
+      });
+      window.scrollTo(0, s.y || 0);
+    }
+  }
+  // remember details state whenever the user opens/closes one, and before leaving the page
+  document.addEventListener("toggle", save, true);
+  window.addEventListener("pagehide", save);
+  restore();
+
+  var live = document.getElementById("live");
+  if (!live || !live.dataset.poll) return;
+  var sig = live.dataset.sig;
+  function tick() {
+    fetch(live.dataset.poll, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.sig !== sig) { save(); location.reload(); return; }
+        if (d.busy) setTimeout(tick, 3000);
+      })
+      .catch(function () { setTimeout(tick, 5000); });
+  }
+  setTimeout(tick, 3000);
+})();
+</script>
 </body>
 </html>

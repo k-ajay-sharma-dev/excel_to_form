@@ -1,67 +1,90 @@
 {% extends "filler/base.html" %}
-{% block head %}{% if row.busy %}<meta http-equiv="refresh" content="3">{% endif %}
+{% block head %}
 <style>
-  .q { font-weight: 600; }
-  .problem { color: var(--bad); font-size: 13px; margin-top: 4px; }
-  .note { color: var(--warn); font-size: 13px; margin-top: 4px; }
-  .checks label { display: block; font-size: 14px; }
-  td.val { width: 42%; }
-  details summary { cursor: pointer; font-weight: 600; }
-  .shot img { max-width: 100%; border: 1px solid var(--line); border-radius: 6px; }
+  .fields { border-top: 1px solid var(--line); }
+  .field { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 20px;
+           padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .field .q { font-weight: 600; overflow-wrap: anywhere; }
+  .field .problem { color: var(--bad); font-size: 13px; margin-top: 4px; overflow-wrap: anywhere; }
+  .field .note { color: var(--warn); font-size: 13px; margin-top: 4px; }
+  .field .meta { color: var(--muted); font-size: 13px; margin-top: 2px; overflow-wrap: anywhere; }
+  .checks label { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; font-size: 15px; }
+  .checks input { margin-top: 4px; width: 18px; height: 18px; flex: none; }
+  .suggest { font-size: 13px; margin-top: 6px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .suggest .btn { min-height: 30px; padding: 2px 10px; font-size: 13px; }
+  details > summary { cursor: pointer; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 8px; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: "▸"; transition: transform .15s; }
+  details[open] > summary::before { transform: rotate(90deg); }
+  details > .fields { margin-top: 12px; }
+  .shot img { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+  .actions-bar { position: sticky; bottom: 0; z-index: 5; box-shadow: 0 -4px 12px rgba(0,0,0,.06); }
+  fieldset.edit { border: 0; padding: 0; margin: 0; min-width: 0; }
+  .rownav { display: flex; gap: 8px 16px; flex-wrap: wrap; }
+  @media (max-width: 700px) {
+    .field { grid-template-columns: 1fr; }
+    /* compact bottom bar on phones so it doesn't cover the fields */
+    .actions-bar { padding: 8px; gap: 8px; flex-wrap: nowrap; margin: 0 -8px 0; border-radius: 10px 10px 0 0; }
+    .actions-bar .btn { flex: 1 1 0; padding: 6px 8px; font-size: 14px; min-height: 40px; }
+    .actions-bar .muted { display: none; }
+  }
 </style>
 {% endblock %}
 
 {% block content %}
-<p class="small"><a href="{% url 'job' row.job_id %}">&larr; {{ row.job.name }}</a>
-  {% if prev %} · <a href="{% url 'row' prev %}">Previous row</a>{% endif %}
-  {% if next %} · <a href="{% url 'row' next %}">Next row</a>{% endif %}</p>
-<h1>Row {{ row.row_no|add:1 }} - {{ row.title }}</h1>
-<p class="sub"><span class="pill s-{{ row.status }}">{{ row.get_status_display }}</span>
-  {% if row.busy %}<span class="muted small"> Working in the browser - this page refreshes by itself…</span>{% endif %}</p>
+<div id="live" {% if row.busy %}data-poll="{% url 'row_status' row.pk %}"{% endif %} data-sig="{{ sig }}"></div>
 
-{% if row.message %}
+<p class="small rownav"><a href="{% url 'job' row.job_id %}">&larr; {{ row.job.name }}</a>
+  {% if prev %}<a href="{% url 'row' prev %}">&lsaquo; Previous row</a>{% endif %}
+  {% if next %}<a href="{% url 'row' next %}">Next row &rsaquo;</a>{% endif %}</p>
+<h1>Row {{ row.row_no|add:1 }} - {{ row.title }}</h1>
+<p class="sub"><span class="pill s-{{ row.status }}">{% if row.busy %}<span class="spinner"></span>{% endif %}{{ row.get_status_display }}</span></p>
+
+{% if row.busy %}
+<div class="banner info">The form is being filled in the background. This page updates by itself when it is done -
+  editing is paused until then so nothing you type gets lost.</div>
+{% elif row.message %}
 <div class="banner {% if row.status == 'submitted' or row.status == 'ready' %}ok{% elif row.status == 'submit_failed' or row.status == 'error' %}bad{% else %}warn{% endif %}"><pre>{{ row.message }}</pre></div>
 {% endif %}
 
 <form method="post">
   {% csrf_token %}
-  <div class="card">
-    <h2>{% if flagged %}Please review these {{ flagged|length }} field(s){% else %}Nothing needs review{% endif %}</h2>
-    {% if flagged %}
-    <p class="muted small" style="margin-top:-6px">Fix the value, or clear it to leave the question empty. Your answer replaces the Excel value.</p>
-    <table>
-      <tr><th>Question</th><th>Value to fill</th></tr>
-      {% for f in flagged %}{% include "filler/_field.html" %}{% endfor %}
-    </table>
-    {% endif %}
-  </div>
+  <fieldset class="edit" {% if row.busy %}disabled{% endif %}>
+    <div class="card">
+      <h2>{% if flagged %}Please review these {{ flagged|length }} field(s){% else %}Nothing needs review{% endif %}</h2>
+      {% if flagged %}
+      <p class="muted small" style="margin-top:-6px">Fix the value, or clear it to leave the question empty. Your answer replaces the Excel value.</p>
+      <div class="fields">{% for f in flagged %}{% include "filler/_field.html" %}{% endfor %}</div>
+      {% endif %}
+    </div>
 
-  <div class="card">
-    <details>
-      <summary>All other fields ({{ others|length }}) - filled fine, editable if needed</summary>
-      <table style="margin-top:12px">
-        <tr><th>Question</th><th>Value to fill</th></tr>
-        {% for f in others %}{% include "filler/_field.html" %}{% endfor %}
-      </table>
-    </details>
-  </div>
+    <div class="card">
+      <details id="others-{{ row.pk }}">
+        <summary>All other fields ({{ others|length }}) - filled fine, editable if needed</summary>
+        <div class="fields">{% for f in others %}{% include "filler/_field.html" %}{% endfor %}</div>
+      </details>
+    </div>
 
-  <div class="card row-actions">
-    <button class="btn" name="action" value="check" {% if row.busy or row.status == 'submitted' %}disabled{% endif %}>Save &amp; check again</button>
-    {% if cfg.submit_enabled %}
-      <button class="btn danger" name="action" value="submit" {% if row.busy or row.status == 'submitted' %}disabled{% endif %}
-        onclick="return confirm('Submit this row to the LIVE Kobo form? This cannot be undone.')">Save &amp; submit to Kobo</button>
-    {% else %}
-      <button class="btn primary" name="action" value="submit" {% if row.busy or row.status == 'submitted' %}disabled{% endif %}>Save &amp; submit (check only - submission is off)</button>
-    {% endif %}
-    <span class="muted small">It is only submitted if every field fills without an error.</span>
-  </div>
+    <div class="card row-actions actions-bar">
+      <button class="btn" name="action" value="check" {% if row.status == 'submitted' %}disabled{% endif %}>Save &amp; check again</button>
+      {% if cfg.submit_enabled %}
+        <button class="btn danger" name="action" value="submit" {% if row.status == 'submitted' %}disabled{% endif %}
+          onclick="return confirm('Submit this row to the LIVE Kobo form? This cannot be undone.')">Save &amp; submit to Kobo</button>
+      {% else %}
+        <button class="btn primary" name="action" value="submit" {% if row.status == 'submitted' %}disabled{% endif %}>Save &amp; submit<span class="hide-sm">&nbsp;(check only)</span></button>
+      {% endif %}
+      <span class="muted small">Only submitted if every field fills without an error{% if not cfg.submit_enabled %}; submission is off{% endif %}.</span>
+    </div>
+  </fieldset>
 </form>
 
 {% if row.screenshot %}
 <div class="card shot">
-  <h2>Form as filled in the last run</h2>
-  <a href="{% url 'row_shot' row.pk %}" target="_blank"><img src="{% url 'row_shot' row.pk %}?v={{ row.updated|date:'U' }}" alt="Screenshot of the filled form"></a>
+  <details id="shot-{{ row.pk }}">
+    <summary>Form as filled in the last run</summary>
+    <a href="{% url 'row_shot' row.pk %}" target="_blank" style="display:block;margin-top:12px">
+      <img src="{% url 'row_shot' row.pk %}?v={{ row.updated|date:'U' }}" alt="Screenshot of the filled form" loading="lazy"></a>
+  </details>
 </div>
 {% endif %}
 {% endblock %}

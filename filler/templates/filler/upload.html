@@ -4,32 +4,32 @@
 <p class="sub">Upload the Kobo Excel/CSV export. Each row is filled into the form and checked; rows with problems are sent to you for review.</p>
 
 <div class="card">
-  <form method="post" enctype="multipart/form-data" class="row-actions">
+  <form method="post" enctype="multipart/form-data" class="row-actions full">
     {% csrf_token %}
     <input type="file" name="file" accept=".xlsx,.xls,.csv" required>
     <button class="btn primary">Upload &amp; check</button>
   </form>
   {% if form.errors %}<p class="banner bad small">{{ form.file.errors|join:" " }}</p>{% endif %}
-  <p class="muted small" style="margin:12px 0 0">Form: {{ cfg.form_url }}</p>
+  <p class="muted small" style="margin:12px 0 0;overflow-wrap:anywhere">Form: {{ cfg.form_url }}</p>
 </div>
 
 <div class="card">
   <h2>Upload history</h2>
   {% if jobs %}
-  <table>
-    <tr><th>File</th><th class="hide-sm">Uploaded</th><th class="hide-sm">Rows</th><th class="hide-sm">Results</th><th>Status</th><th></th></tr>
+  <table class="stack">
+    <tr class="head"><th>File</th><th>Uploaded</th><th>Rows</th><th>Results</th><th>Status</th><th></th></tr>
     {% for j in jobs %}
     <tr>
-      <td>{{ j.name }}<div class="muted small">{{ j.size|filesizeformat }} · <a href="{% url 'job_file' j.pk %}">download</a></div></td>
-      <td class="hide-sm muted small">{{ j.created|date:"d M Y, H:i" }}{% if j.finished %}<br>done {{ j.finished|date:"H:i" }}{% endif %}</td>
-      <td class="hide-sm">{{ j.n_rows }}{% if j.total_rows and j.total_rows != j.n_rows %} <span class="muted small">of {{ j.total_rows }}</span>{% endif %}</td>
-      <td class="hide-sm small">
+      <td><b style="overflow-wrap:anywhere">{{ j.name }}</b><div class="muted small">{{ j.size|filesizeformat }} · <a href="{% url 'job_file' j.pk %}">download</a></div></td>
+      <td class="muted small" data-label="Uploaded">{{ j.created|date:"d M Y, H:i" }}{% if j.finished %}<br>done {{ j.finished|date:"H:i" }}{% endif %}</td>
+      <td data-label="Rows">{{ j.n_rows }}{% if j.total_rows and j.total_rows != j.n_rows %} <span class="muted small">of {{ j.total_rows }}</span>{% endif %}</td>
+      <td class="small">
         {% if j.n_submitted %}<span class="pill s-submitted">{{ j.n_submitted }} submitted</span> {% endif %}
         {% if j.n_ready %}<span class="pill s-ready">{{ j.n_ready }} ready</span> {% endif %}
         {% if j.n_review %}<span class="pill s-review">{{ j.n_review }} to review</span>{% endif %}
       </td>
       <td><span class="pill s-{{ j.status }}">{{ j.get_status_display }}</span></td>
-      <td><div class="row-actions" style="flex-wrap:nowrap">
+      <td class="actions"><div class="row-actions" style="flex-wrap:nowrap">
         <a class="btn" href="{% url 'job' j.pk %}">Open</a>
         {% include "filler/_delete.html" %}
       </div></td>

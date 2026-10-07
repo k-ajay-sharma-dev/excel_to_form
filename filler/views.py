@@ -3,7 +3,7 @@ from urllib.parse import quote
 
 from django.contrib import messages
 from django.db.models import Count, Q
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 
 from . import tasks
@@ -42,6 +42,25 @@ def job_delete(request, pk):
     job.delete()
     messages.success(request, f"Deleted {name} and all its results.")
     return redirect("upload")
+
+
+def job_sig(job):
+    """Changes whenever anything visible on the job page changes."""
+    return job.status + ":" + ",".join(job.rows.order_by("row_no").values_list("status", flat=True))
+
+
+def row_sig(row):
+    return f"{row.status}:{row.updated.timestamp()}"
+
+
+def job_status(request, pk):
+    job = get_object_or_404(Job.objects.defer("data"), pk=pk)
+    return JsonResponse({"busy": job.busy, "sig": job_sig(job)})
+
+
+def row_status(request, pk):
+    row = get_object_or_404(Row.objects.defer("screenshot"), pk=pk)
+    return JsonResponse({"busy": row.busy, "sig": row_sig(row)})
 
 
 def job_file(request, pk):
@@ -86,7 +105,7 @@ def job_detail(request, pk):
     for r in rows:
         counts[r.get_status_display()] = counts.get(r.get_status_display(), 0) + 1
     return render(request, "filler/job.html", {
-        "job": job, "rows": rows, "counts": counts, "cfg": AppSettings.get(),
+        "job": job, "rows": rows, "counts": counts, "cfg": AppSettings.get(), "sig": job_sig(job),
         "n_ready": sum(r.status == "ready" for r in rows),
     })
 
@@ -132,7 +151,7 @@ def row_review(request, pk):
     siblings = list(row.job.rows.values_list("pk", flat=True))
     i = siblings.index(row.pk)
     return render(request, "filler/row.html", {
-        "row": row, "flagged": flagged, "others": others, "cfg": AppSettings.get(),
+        "row": row, "flagged": flagged, "others": others, "cfg": AppSettings.get(), "sig": row_sig(row),
         "prev": siblings[i - 1] if i > 0 else None,
         "next": siblings[i + 1] if i + 1 < len(siblings) else None,
     })

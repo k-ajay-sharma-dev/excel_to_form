@@ -1,23 +1,24 @@
 {% extends "filler/base.html" %}
-{% block head %}{% if job.busy %}<meta http-equiv="refresh" content="4">{% endif %}{% endblock %}
 {% block content %}
+<div id="live" {% if job.busy %}data-poll="{% url 'job_status' job.pk %}"{% endif %} data-sig="{{ sig }}"></div>
+
 <p class="small"><a href="{% url 'upload' %}">&larr; All uploads</a></p>
-<div class="row-actions" style="justify-content:space-between">
+<div class="row-actions" style="justify-content:space-between;margin-bottom:4px">
   <h1>{{ job.name }}</h1>
   <span class="row-actions"><a class="btn" href="{% url 'job_file' job.pk %}">Download file</a>
     {% with j=job %}{% include "filler/_delete.html" %}{% endwith %}</span>
 </div>
 <p class="sub">
-  <span class="pill s-{{ job.status }}">{{ job.get_status_display }}</span>
+  <span class="pill s-{{ job.status }}">{% if job.busy %}<span class="spinner"></span>{% endif %}{{ job.get_status_display }}</span>
   {{ job.message|truncatechars:120 }}
-  {% if job.busy %}<span class="muted small"> - updating automatically…</span>{% endif %}
+  {% if job.busy %}<span class="muted small"> - updates by itself as rows finish</span>{% endif %}
 </p>
 
 {% if job.status == "error" %}<div class="banner bad"><pre>{{ job.message }}</pre></div>{% endif %}
 
 {% if counts %}
-<div class="card row-actions">
-  {% for k, v in counts.items %}<span><b>{{ v }}</b> {{ k }}</span>{% endfor %}
+<div class="card row-actions full">
+  <div class="row-actions">{% for k, v in counts.items %}<span><b>{{ v }}</b> {{ k }}</span>{% endfor %}</div>
   <span style="flex:1"></span>
   <form method="post">{% csrf_token %}
     <input type="hidden" name="action" value="submit_ready">
@@ -29,18 +30,18 @@
 {% endif %}
 
 <div class="card">
-  <table>
-    <tr><th>#</th><th>Beneficiary</th><th>Status</th><th class="hide-sm">Details</th><th></th></tr>
+  <table class="stack">
+    <tr class="head"><th>#</th><th>Beneficiary</th><th>Status</th><th>Details</th><th></th></tr>
     {% for r in rows %}
     <tr>
-      <td>{{ r.row_no|add:1 }}</td>
-      <td>{{ r.title }}</td>
-      <td><span class="pill s-{{ r.status }}">{{ r.get_status_display }}</span></td>
-      <td class="hide-sm small">
+      <td data-label="Row">{{ r.row_no|add:1 }}</td>
+      <td data-label="Beneficiary"><b>{{ r.title }}</b></td>
+      <td><span class="pill s-{{ r.status }}">{% if r.busy and r.status != "pending" %}<span class="spinner"></span>{% endif %}{{ r.get_status_display }}</span></td>
+      <td class="small">
         {% if r.n_flagged %}<b>{{ r.n_flagged }}</b> field(s) to review. {% endif %}
         <span class="muted">{{ r.message|truncatechars:110 }}</span>
       </td>
-      <td><a class="btn" href="{% url 'row' r.pk %}">{% if r.status == "review" %}Review{% else %}Open{% endif %}</a></td>
+      <td class="actions"><a class="btn" href="{% url 'row' r.pk %}">{% if r.status == "review" %}Review{% else %}Open{% endif %}</a></td>
     </tr>
     {% empty %}
     <tr><td colspan="5" class="muted">Reading the file…</td></tr>
