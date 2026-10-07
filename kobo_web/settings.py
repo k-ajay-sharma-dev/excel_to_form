@@ -7,24 +7,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".vercel.app", ".now.sh"]
-CSRF_TRUSTED_ORIGINS = ["https://*.vercel.app"]
+ALLOWED_HOSTS = ["*"]
+CSRF_TRUSTED_ORIGINS = ["https://*.vercel.app", "https://*.render.com", "https://*.onrender.com"]
 
-env_hosts = os.environ.get("ALLOWED_HOSTS", "").split(",")
-for h in env_hosts:
-    h = h.strip()
-    if h and h not in ALLOWED_HOSTS:
-        ALLOWED_HOSTS.append(h)
-
-VERCEL_URL = os.environ.get("VERCEL_URL")
-if VERCEL_URL and VERCEL_URL not in ALLOWED_HOSTS:
-    ALLOWED_HOSTS.append(VERCEL_URL)
-    CSRF_TRUSTED_ORIGINS.append(f"https://{VERCEL_URL}")
-
-RENDER_HOST = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-if RENDER_HOST:
-    ALLOWED_HOSTS.append(RENDER_HOST)
-    CSRF_TRUSTED_ORIGINS.append(f"https://{RENDER_HOST}")
+env_origins = os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+for o in env_origins:
+    o = o.strip()
+    if o and o not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(o)
 
 # Server-side lock on real submission. The Settings switch alone is not enough: real submission
 # also needs KOBO_ALLOW_SUBMIT=1 in the environment. Not set = the app can never submit.
