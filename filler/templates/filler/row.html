@@ -152,24 +152,32 @@
   <fieldset class="edit" {% if row.busy %}disabled{% endif %}>
     
     <!-- Flagged / Review Section -->
-    <div class="card" style="{% if flagged %}border-left: 4px solid var(--warn);{% endif %}">
+    <div class="card" style="{% if flagged and not row.busy %}border-left: 4px solid var(--warn);{% endif %}">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
         <h2 style="margin: 0;">
-          {% if flagged %}
+          {% if row.busy %}
+            ⌛ Browser Check in Progress…
+          {% elif flagged %}
             🔍 Review Required: {{ flagged|length }} Field(s)
-          {% else %}
+          {% elif row.status == 'ready' or row.status == 'submitted' or row.status == 'dry_run' %}
             ✨ Validation Passed: Nothing Needs Review
+          {% else %}
+            📋 Field Validation &amp; Review
           {% endif %}
         </h2>
       </div>
       
-      {% if flagged %}
-      <p class="muted small" style="margin: 0 0 16px;">
-        Inspect and edit the fields below. Your changes will replace the Excel value and re-validate on the live form.
-      </p>
-      <div class="fields">
-        {% for f in flagged %}{% include "filler/_field.html" %}{% endfor %}
-      </div>
+      {% if row.busy %}
+        <p class="muted small" style="margin: 4px 0 0;">
+          The Playwright browser is currently opening Kobo and checking each field. Validation results will update automatically once completed.
+        </p>
+      {% elif flagged %}
+        <p class="muted small" style="margin: 4px 0 16px;">
+          Inspect and edit the fields below. Your changes will replace the Excel value and re-validate on the live form.
+        </p>
+        <div class="fields">
+          {% for f in flagged %}{% include "filler/_field.html" %}{% endfor %}
+        </div>
       {% endif %}
     </div>
 
@@ -177,7 +185,13 @@
     <div class="card">
       <details id="others-{{ row.pk }}">
         <summary>
-          All Other Fields ({{ others|length }}) — Filled Successfully
+          {% if row.busy %}
+            All Fields ({{ others|length }}) — Pending Browser Check
+          {% elif row.status == 'ready' or row.status == 'submitted' or row.status == 'dry_run' %}
+            All Other Fields ({{ others|length }}) — Filled Successfully
+          {% else %}
+            All Other Fields ({{ others|length }})
+          {% endif %}
         </summary>
         <div class="fields">
           {% for f in others %}{% include "filler/_field.html" %}{% endfor %}
