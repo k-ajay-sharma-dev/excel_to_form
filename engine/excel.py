@@ -181,7 +181,7 @@ def build_mapping(df):
         m = {
             "header": h,
             "col": col,
-            "kid_cols": [H.index(k) + e["off"] for k in kids.get(h, [])],
+            "kid_cols": [H.index(k) for k in kids.get(h, [])],
             "alt_col": None if e["alt_off"] is None else i + e["alt_off"],
             "conf": e["conf"],
             # option labels from the "Question/Option" columns, in form order
@@ -189,7 +189,8 @@ def build_mapping(df):
             "multi": False,
         }
         if m["options"]:
-            m["multi"] = _is_multi(df, h, col, m["kid_cols"])
+            opt_slugs = [slug(o) for o in m["options"]]
+            m["multi"] = _is_multi(df, h, col, m["kid_cols"], opt_slugs)
         elif 0 <= col < n:
             # plain yes/no questions have no option columns in the export; offer Yes/No anyway
             vals = {clean_value(h, v).lower() for v in df.iloc[:, col]} - {""}
@@ -203,7 +204,7 @@ def build_mapping(df):
     return mapping
 
 
-def _is_multi(df, header, col, kid_cols):
+def _is_multi(df, header, col, kid_cols, opt_slugs=None):
     """Tick-all-that-apply question? (header says so, or some row has several answers)."""
     if re.search(r"tick all|select all|all that apply", header, re.I):
         return True
@@ -211,7 +212,7 @@ def _is_multi(df, header, col, kid_cols):
         row = df.iloc[r]
         if len(clean_value(header, _cell(row, col)).split()) > 1:
             return True
-        if sum(clean_value(header, _cell(row, j)) in ("1", "true", "True") for j in kid_cols) > 1:
+        if sum(is_option_selected(_cell(row, j), opt_slugs[k] if opt_slugs and k < len(opt_slugs) else None) for k, j in enumerate(kid_cols)) > 1:
             return True
     return False
 
@@ -236,11 +237,18 @@ def _cell(row, j):
     return row.iloc[j] if j is not None and 0 <= j < len(row) else None
 
 
-def is_option_selected(v):
+def is_option_selected(v, opt_slug=None):
     if is_blank(v):
         return False
     s = str(v).strip().lower()
-    return s not in ("0", "false", "no", "none", "nan")
+    if s in ("0", "false", "no", "none", "nan"):
+        return False
+    if s in ("1", "true", "yes"):
+        return True
+    if opt_slug:
+        st = slug(s)
+        return st == opt_slug or _is_choice_name(s, [opt_slug])
+    return True
 
 
 def row_fields(df, mapping, r):
@@ -252,7 +260,9 @@ def row_fields(df, mapping, r):
             continue
         h = m["header"]
         value = clean_value(h, _cell(row, m["col"]))
-        flags = [is_option_selected(_cell(row, j)) for j in m["kid_cols"]]
+        options = [[slug(o), o] for o in m.get("options", [])]
+        opt_slugs = [o[0] for o in options]
+        flags = [is_option_selected(_cell(row, j), opt_slugs[k] if k < len(opt_slugs) else None) for k, j in enumerate(m["kid_cols"])]
         note, suggestion = "", ""
         if m["alt_col"] is not None and m.get("off", 0) != 0:
             alt = clean_value(h, _cell(row, m["alt_col"]))
@@ -265,13 +275,15 @@ def row_fields(df, mapping, r):
             continue  # nothing in Excel -> leave blank
         question, instance = split_instance(h)
         excel_value = value
-        kind, options = "", []
+        kind = ""
         if m["options"]:
             # until the live form tells us its exact options, offer the Excel's own option columns;
             # option values are slugs of the labels, which the filler matches against the form
             kind = "checkbox" if m["multi"] else "radio"
-            options = [[slug(o), o] for o in m["options"]]
             picked = choice_selected(value, flags, m["options"])
+            if not m["multi"] and len(picked) > 1:
+                primary = [i for i in picked if _is_choice_name(value, [opt_slugs[i]])]
+                picked = primary[:1] if primary else picked[:1]
             if picked:
                 value = " ".join(options[i][0] for i in picked)
         out.append({
