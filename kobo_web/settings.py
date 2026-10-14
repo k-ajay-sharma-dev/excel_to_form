@@ -81,13 +81,44 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "kobo_web.wsgi.application"
 
+# The container's own disk is wiped on every redeploy/restart. Put the database on a persistent
+# disk instead: SQLITE_PATH wins; otherwise Railway's volume (RAILWAY_VOLUME_MOUNT_PATH is set
+# automatically when a volume is attached); otherwise the project folder (local use).
+_db_dir = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+SQLITE_PATH = Path(os.environ.get("SQLITE_PATH") or (Path(_db_dir) / "db.sqlite3" if _db_dir else BASE_DIR / "db.sqlite3"))
+SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+        "NAME": SQLITE_PATH,
         "OPTIONS": {"timeout": 30},  # the background filler writes while pages read
     }
 }
+
+# Oracle (e.g. Oracle Cloud Autonomous Database, free tier) when ORACLE_DSN is set; SQLite otherwise.
+#   ORACLE_DSN       connect string from the DB's "Database connection" page, e.g. "(description=...)"
+#   ORACLE_USER / ORACLE_PASSWORD
+#   ORACLE_WALLET_PEM + ORACLE_WALLET_PASSWORD   only for mutual TLS: the text of ewallet.pem from
+#                    the downloaded wallet zip, and the password chosen when downloading it
+# python-oracledb runs in "thin" mode, so no Oracle client needs installing.
+if os.environ.get("ORACLE_DSN"):
+    _oracle_opts = {}
+    if os.environ.get("ORACLE_WALLET_PEM"):
+        _wallet = Path(os.environ.get("ORACLE_WALLET_DIR", "/tmp/oracle_wallet"))
+        _wallet.mkdir(parents=True, exist_ok=True)
+        (_wallet / "ewallet.pem").write_text(os.environ["ORACLE_WALLET_PEM"].replace("\\n", "\n"))
+        _oracle_opts = {"config_dir": str(_wallet), "wallet_location": str(_wallet),
+                        "wallet_password": os.environ.get("ORACLE_WALLET_PASSWORD", "")}
+    DATABASES["default"] = {
+        "ENGINE": "django.db.backends.oracle",
+        "NAME": os.environ["ORACLE_DSN"],  # full DSN, so HOST/PORT stay empty
+        "USER": os.environ.get("ORACLE_USER", ""),
+        "PASSWORD": os.environ.get("ORACLE_PASSWORD", ""),
+        "OPTIONS": _oracle_opts,
+        "CONN_MAX_AGE": 60,
+        "CONN_HEALTH_CHECKS": True,  # Autonomous DB drops idle sessions
+    }
 
 MESSAGE_STORAGE = "django.contrib.messages.storage.cookie.CookieStorage"
 

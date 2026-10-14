@@ -77,6 +77,22 @@
 </div>
 {% endif %}
 
+<form method="get" class="card" style="padding: 14px 20px; margin-bottom: 16px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+  <input type="search" name="q" value="{{ q }}" placeholder="Search beneficiary name or row #" style="flex: 1 1 220px; min-width: 0;">
+  <select name="status" style="flex: 0 1 220px;" onchange="this.form.submit()">
+    <option value="">All statuses ({{ total }})</option>
+    {% for value, label, n in filters %}
+      <option value="{{ value }}" {% if value == status %}selected{% endif %}>{{ label }} ({{ n }})</option>
+    {% endfor %}
+  </select>
+  <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 14px; white-space: nowrap;">
+    <input type="checkbox" name="flagged" value="1" {% if flagged_only %}checked{% endif %} onchange="this.form.submit()">
+    Only rows with fields to review
+  </label>
+  <button class="btn primary" style="padding: 8px 16px;">Filter</button>
+  {% if filtered %}<a class="btn" href="{% url 'job' job.pk %}" style="padding: 8px 14px;">Clear</a>{% endif %}
+</form>
+
 <div class="card" style="padding: 0; overflow: hidden;">
   <table class="stack">
     <thead>
@@ -114,11 +130,32 @@
       {% empty %}
       <tr>
         <td colspan="5" class="muted" style="text-align: center; padding: 36px 16px;">
-          Reading and parsing file records…
+          {% if filtered %}No rows match these filters.{% else %}Reading and parsing file records…{% endif %}
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+
+{% if page.paginator.count %}
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px;">
+  <span class="muted small">Rows {{ page.start_index }}–{{ page.end_index }} of {{ page.paginator.count }}</span>
+  <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+    {% if page.has_previous %}
+      <a class="btn" href="?page=1{{ qs }}">« First</a>
+      <a class="btn" href="?page={{ page.previous_page_number }}{{ qs }}">‹ Prev</a>
+    {% endif %}
+    {% for n in page_range %}
+      {% if n == page.paginator.ELLIPSIS %}<span class="muted">…</span>
+      {% elif n == page.number %}<span class="btn primary" style="pointer-events: none;">{{ n }}</span>
+      {% else %}<a class="btn" href="?page={{ n }}{{ qs }}">{{ n }}</a>{% endif %}
+    {% endfor %}
+    {% if page.has_next %}
+      <a class="btn" href="?page={{ page.next_page_number }}{{ qs }}">Next ›</a>
+      <a class="btn" href="?page={{ page.paginator.num_pages }}{{ qs }}">Last »</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 {% endblock %}

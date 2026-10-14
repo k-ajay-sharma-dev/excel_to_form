@@ -366,7 +366,7 @@
 
 <script>
 (function () {
-  var KEY = "view:" + location.pathname;
+  var KEY = "view:" + location.pathname + location.search;  // each page/filter keeps its own scroll
   function save() {
     try {
       var open = [].map.call(document.querySelectorAll("details[id]"), function (d) { return d.id + "=" + (d.open ? 1 : 0); });

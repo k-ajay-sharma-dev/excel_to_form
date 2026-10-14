@@ -1,7 +1,8 @@
 import mimetypes
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.db.models import Count, Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -44,8 +45,9 @@ def job_delete(request, pk):
 
 
 def job_sig(job):
-    """Changes whenever anything visible on the job page changes."""
-    return job.status + ":" + ",".join(job.rows.order_by("row_no").values_list("status", flat=True))
+    """Changes whenever a row changes status (counted in the database, cheap even for 2000 rows)."""
+    counts = job.rows.values("status").annotate(n=Count("pk")).order_by("status")
+    return job.status + ":" + ",".join(f"{c['status']}={c['n']}" for c in counts)
 
 
 def row_sig(row):
@@ -88,15 +90,22 @@ def settings_view(request):
     return render(request, "filler/settings.html", {"form": form, "cfg": cfg})
 
 
+PAGE_SIZE = 50
+FLAGGED = Count("fields", filter=(  # same rule as Field.needs_review, counted in the database
+    Q(fields__status__startswith="FAILED") | Q(fields__status__startswith="SKIPPED")
+    | (Q(fields__reviewed=False) & Q(fields__note__isnull=False) & ~Q(fields__note=""))
+))
+
+
 def job_detail(request, pk):
+    """One page of rows at a time; totals come from the database, so a 2000-row job stays light."""
     job = get_object_or_404(Job.objects.defer("data"), pk=pk)
-    rows = list(job.rows.defer("screenshot").prefetch_related("fields"))
     if request.method == "POST":
         action = request.POST.get("action")
         if action == "submit_ready":
-            ready = [r.pk for r in rows if r.status == "ready"]
+            ready = list(job.rows.filter(status="ready").values_list("pk", flat=True))
             if ready:
-                Row.objects.filter(pk__in=ready).update(status="submitting")
+                Row.objects.filter(pk__in=ready).update(status="submitting", message=tasks.SUBMIT_QUEUED)
                 tasks.start(tasks.submit_rows, ready)
                 messages.info(request, f"Submitting {len(ready)} row(s)…")
             return redirect("job", pk)
@@ -106,14 +115,32 @@ def job_detail(request, pk):
             job.save(update_fields=["status", "message"])
             messages.info(request, "Processing stopped.")
             return redirect("job", pk)
-    for r in rows:
-        r.n_flagged = len(r.flagged())
-    counts = {}
-    for r in rows:
-        counts[r.get_status_display()] = counts.get(r.get_status_display(), 0) + 1
+
+    labels = dict(Row.STATUS)
+    by_status = dict(job.rows.values_list("status").annotate(n=Count("pk")).order_by())
+    counts = {labels.get(st, st): n for st, n in sorted(by_status.items(), key=lambda kv: list(labels).index(kv[0]) if kv[0] in labels else 99)}
+    status = request.GET.get("status", "")
+    if status not in labels:
+        status = ""
+    flagged_only = request.GET.get("flagged") == "1"
+    q = request.GET.get("q", "").strip()
+    qs = job.rows.defer("screenshot").order_by("row_no")
+    if status:
+        qs = qs.filter(status=status)
+    if q:  # beneficiary name, or the row number shown in the "#" column
+        qs = qs.filter(Q(title__icontains=q) | (Q(row_no=int(q) - 1) if q.isdigit() and int(q) > 0 else Q(pk__in=[])))
+    if flagged_only:
+        qs = qs.annotate(n_flag=FLAGGED).filter(n_flag__gt=0)
+    page = Paginator(qs, PAGE_SIZE).get_page(request.GET.get("page"))
+    rows = list(page.object_list.annotate(n_flagged=FLAGGED))
     return render(request, "filler/job.html", {
-        "job": job, "rows": rows, "counts": counts, "cfg": AppSettings.get(), "sig": job_sig(job),
-        "n_ready": sum(r.status == "ready" for r in rows),
+        "job": job, "rows": rows, "page": page, "counts": counts, "cfg": AppSettings.get(), "sig": job_sig(job),
+        "n_ready": by_status.get("ready", 0), "status": status, "q": q, "flagged_only": flagged_only,
+        "filtered": bool(status or q or flagged_only), # filters carried along by the page links, URL-encoded (names can contain any character)
+        "qs": "".join("&" + urlencode({k: v}) for k, v in (("q", q), ("status", status), ("flagged", "1" if flagged_only else "")) if v),
+        "page_range": page.paginator.get_elided_page_range(page.number, on_each_side=2, on_ends=1),
+        "filters": [(st, labels[st], by_status[st]) for st in labels if by_status.get(st)],
+        "total": sum(by_status.values()),
     })
 
 
@@ -167,7 +194,8 @@ def row_review(request, pk):
                 f.reviewed = True  # the user has seen the flagged value and kept or changed it
             f.save(update_fields=["value", "flags", "reviewed"])
         row.status = "submitting" if action == "submit" else "filling"
-        row.save(update_fields=["status"])
+        row.message = tasks.SUBMIT_QUEUED if action == "submit" else ""
+        row.save(update_fields=["status", "message"])
         tasks.start(tasks.fill_row, row.pk, action == "submit")
         return redirect("row", pk)
 

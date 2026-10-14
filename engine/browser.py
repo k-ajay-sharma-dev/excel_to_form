@@ -12,12 +12,17 @@ SUBMISSION SAFETY
 import os
 import re
 import sys
+import time
 
 from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
 PROBLEM = ("FAILED", "SKIPPED")
 WAITING = "WAITING"  # value of a crop block whose crop isn't ticked: never submitted, but not flagged itself
+LEFT_OUT = "LEFT OUT"  # value deliberately not filled (not applicable on the form); not a problem
+
+# Excel answers that mean "no value"; in a number box they are left empty instead of failing
+NOTHING = {"no", "nil", "none", "na", "n/a", "not mentioned", "not applicable", ".", "_", "-", "n0"}
 BLOCKS = "form.or label.question, form.or fieldset.question"
 
 LABELS_JS = """() => [...document.querySelectorAll('form.or label.question, form.or fieldset.question')]
@@ -144,6 +149,11 @@ def _pick(token, values, labels):
     for i, lab in enumerate(labels):
         if st and (slug(lab) == st or slug(values[i]) == st):
             return i
+    tight = re.sub(r"[^a-z0-9]", "", t.lower())  # spacing differences: "BALAJI" vs "BALA JI"
+    if tight:
+        for i, lab in enumerate(labels):
+            if re.sub(r"[^a-z0-9]", "", lab.lower()) == tight:
+                return i
     want = norm(t.replace("_", " "))
     for i, lab in enumerate(labels):
         nl = norm(lab)
@@ -211,6 +221,8 @@ def fill_question(page, q, value, flags=None):
     if not val:
         return "left empty", "text", []
     if (inp.get_attribute("type") or "") == "number":
+        if val.lower() in NOTHING:
+            return f"{LEFT_OUT}: '{val}' means no value, so this number box was left empty", "text", []
         try:
             float(val)
         except ValueError:
@@ -242,7 +254,10 @@ def _fill_field(page, f, ticked):
     if q is None:
         return "FAILED: question not found on the form", None, []
     if not bring_into_view(page, q):
-        return "SKIPPED: question is hidden on the form (skip logic) - clear the value if it should be empty", None, []
+        # an earlier answer of this record makes the question not apply (e.g. "If yes..." after "No");
+        # the form would discard the value anyway, so it is left out rather than flagged
+        return (f"{LEFT_OUT}: the form hides this question because of an earlier answer, "
+                f"so the Excel value was not filled"), None, []
     try:
         res = fill_question(page, q, f["value"], f.get("flags"))
         if res[1] in ("radio", "checkbox"):
@@ -270,17 +285,29 @@ def _go_to_submit(page):
 SAFE_POST = re.compile(r"/transform/", re.I)
 SUBMISSION = re.compile(r"/submission", re.I)
 
+# A row is given up after this long, so one stuck page can't block every row queued behind it.
+ROW_TIME_LIMIT = int(os.environ.get("ROW_TIME_LIMIT_SECONDS", "240"))
+STEP_TIMEOUT_MS = 30000  # any single click / fill / wait
+
+
+class RowTimeLimit(Exception):
+    pass
+
 
 def run_row(form_url, fields, *, submit=False, may_submit=None, headless=True, slow_mo=0,
-            screenshot=False, log=print):
+            screenshot=False, log=print, time_limit=None):
     """
     Fill one record. fields: [{question, instance, value, flags}].
     may_submit: callable re-checked right before the Submit click (e.g. reads the Settings switch);
     if it returns False at that moment, nothing is sent.
     screenshot=True: return a JPEG of the filled form (before any submit) in out["screenshot"].
-    Returns {results: [{status, kind, options}], invalid: [...], submitted: bool, message: str, screenshot}.
+    time_limit: seconds for the whole row (default ROW_TIME_LIMIT); past it the row stops with a
+    "Browser error: time limit" message and is never submitted.
+    Returns {results: [{status, kind, options}], invalid: [...], submitted: bool, message: str, screenshot,
+    sent: bool}. sent = a submission request actually left the browser (even if no answer came back).
     """
-    out = {"results": [], "invalid": [], "submitted": False, "message": "", "screenshot": None}
+    out = {"results": [], "invalid": [], "submitted": False, "message": "", "screenshot": None, "sent": False}
+    deadline = time.monotonic() + (time_limit or ROW_TIME_LIMIT)
     gate = {"open": False}
 
     with sync_playwright() as p:
@@ -298,6 +325,7 @@ def run_row(form_url, fields, *, submit=False, may_submit=None, headless=True, s
             if req.method in ("GET", "HEAD", "OPTIONS"):
                 route.continue_()
             elif gate["open"] and SUBMISSION.search(req.url):
+                out["sent"] = True
                 route.continue_()  # only during the one Submit click, only to the submission URL
             elif SAFE_POST.search(req.url) and not SUBMISSION.search(req.url):
                 route.continue_()
@@ -308,14 +336,17 @@ def run_row(form_url, fields, *, submit=False, may_submit=None, headless=True, s
         ctx.route("**/*", guard)
         page = ctx.new_page()
         page.on("dialog", lambda d: d.accept())
+        page.set_default_timeout(STEP_TIMEOUT_MS)
         try:
-            page.goto(form_url)
+            page.goto(form_url, timeout=60000)
             page.wait_for_selector("form.or", timeout=60000)
             remove = "#save-draft, .save-draft" + ("" if submit else ", #submit-form, .submit-form")
             page.evaluate("sel => document.querySelectorAll(sel).forEach(e => e.remove())", remove)
 
             ticked = {}
             for f in fields:
+                if time.monotonic() > deadline:
+                    raise RowTimeLimit()
                 status, kind, opts = _fill_field(page, f, ticked)
                 out["results"].append({"status": status, "kind": kind, "options": opts})
                 log(f"  {f['question'][:55]:55} = {f['value'][:25]:25} -> {status}")
@@ -330,6 +361,8 @@ def run_row(form_url, fields, *, submit=False, may_submit=None, headless=True, s
             elif problems or out["invalid"]:
                 out["message"] = (f"Not submitted: {len(problems)} field(s) could not be filled"
                                   f"{' and the form shows errors' if out['invalid'] else ''}.")
+            elif time.monotonic() > deadline:
+                raise RowTimeLimit()
             elif may_submit is not None and not may_submit():
                 out["message"] = "Not submitted: real submission was switched off in Settings."
             else:
@@ -351,6 +384,9 @@ def run_row(form_url, fields, *, submit=False, may_submit=None, headless=True, s
                     out["message"] = "Not submitted: the form refused to submit (required or invalid fields)."
                 finally:
                     gate["open"] = False
+        except RowTimeLimit:
+            out["message"] = (f"Browser error: time limit of {time_limit or ROW_TIME_LIMIT}s reached "
+                              f"after {len(out['results'])} of {len(fields)} fields.")
         except Exception as e:
             out["message"] = f"Browser error: {type(e).__name__}: {str(e).splitlines()[0][:200]}"
         finally:
