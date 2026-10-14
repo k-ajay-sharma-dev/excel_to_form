@@ -88,6 +88,7 @@ class Field(models.Model):
     header = models.TextField()        # Excel header
     question = models.TextField()      # label looked up on the form
     instance = models.PositiveIntegerField(default=0)  # copy number inside a repeat group
+    group = models.TextField(blank=True)  # set: fill inside the block of the crop ticked in this question
     value = models.TextField(blank=True)               # what will be filled (user can edit)
     excel_value = models.TextField(blank=True)         # what the Excel said
     suggestion = models.TextField(blank=True)          # value from the other candidate column

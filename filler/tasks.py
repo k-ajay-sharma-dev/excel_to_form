@@ -55,6 +55,7 @@ def process_job(job_id):
             row = Row.objects.create(job=job, row_no=r, title=excel.row_title(fields, r)[:255])
             Field.objects.bulk_create([
                 Field(row=row, order=k, header=f["header"], question=f["question"], instance=f["instance"],
+                      group=f.get("group", ""),
                       value=f["value"], excel_value=f["excel_value"], suggestion=f["suggestion"],
                       flags=f["flags"], note=f["note"], kind=f["kind"], options=f["options"])
                 for k, f in enumerate(fields)
@@ -100,7 +101,8 @@ def fill_row(row_id, submit=False):
     row.status = "submitting" if submit else "filling"
     row.save(update_fields=["status"])
 
-    payload = [{"question": f.question, "instance": f.instance, "value": f.value, "flags": f.flags} for f in fields]
+    payload = [{"question": f.question, "instance": f.instance, "group": f.group, "value": f.value, "flags": f.flags}
+               for f in fields]
 
     try:
         res = browser.run_row(cfg.form_url, payload, submit=real_submit,

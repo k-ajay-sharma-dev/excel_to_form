@@ -48,7 +48,8 @@ def _matching_blocks(page, label):
     if exact:
         return exact
     return [i for i, t in enumerate(labels)
-            if t and (t.startswith(target[:30]) or (len(t) >= 15 and target.startswith(t)))]
+            if t and (t.startswith(target[:30]) or (len(t) >= 15 and target.startswith(t))
+                      or (len(target) >= 15 and t.endswith(" " + target)))]  # "27 1b Rabi ..." vs "1b Rabi ..."
 
 
 def _add_repeat(page, block):
@@ -75,6 +76,39 @@ def find_question(page, label, instance=0):
             break
         idx = _matching_blocks(page, label)
     return blocks.nth(idx[instance]) if len(idx) > instance else None
+
+
+GROUP_JS = """([anchor, crop]) => {
+    const blocks = [...document.querySelectorAll('form.or label.question, form.or fieldset.question')];
+    const a = blocks[anchor];
+    const c = s => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const want = c(crop);
+    if (!a || !want) return null;
+    for (const g of document.querySelectorAll('form.or section.or-group, form.or section.or-group-data')) {
+        if (!(a.compareDocumentPosition(g) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+        const h = g.querySelector(':scope > h4 .question-label');
+        if (!h || !c(h.innerText).includes(want)) continue;
+        return blocks.map((b, i) => g.contains(b) ? i : -1).filter(i => i >= 0);
+    }
+    return null;
+}"""
+
+TICKED_JS = """el => [...el.querySelectorAll('input:checked')]
+    .map(i => { const l = i.closest('label'); return (l ? l.innerText : i.value).trim(); })"""
+
+
+def find_in_group(page, label, anchor_label, crop):
+    """Question `label` inside the first block titled with `crop` that follows question `anchor_label`
+    (e.g. "Area (Acres)" in "27 1b5 Rabi (Groundnut)" after "27 1b Rabi Seasonal Crop Name")."""
+    anchor = _matching_blocks(page, anchor_label)
+    if not anchor:
+        return None
+    idx = page.evaluate(GROUP_JS, [anchor[0], crop])
+    if not idx:
+        return None
+    labels = page.evaluate(LABELS_JS)
+    hits = [i for i in idx if norm(labels[i]) == norm(label)]
+    return page.locator(BLOCKS).nth(hits[0]) if hits else None
 
 
 def bring_into_view(page, q):
@@ -185,17 +219,31 @@ def fill_question(page, q, value, flags=None):
     return "filled (text)", "text", []
 
 
-def _fill_field(page, f):
+def _fill_field(page, f, ticked):
+    """ticked: {question: option labels ticked in it so far}, used to place fields that have a group."""
     val = (f.get("value") or "").strip()
     if not val and not any(f.get("flags") or []):
         return "left empty", None, []
-    q = find_question(page, f["question"], f.get("instance", 0))
+    group = f.get("group") or ""
+    if group:
+        crops = ticked.get(norm(group), [])
+        if len(crops) != 1:
+            return (f"FAILED: needs exactly one crop ticked in '{group[:60]}' to know where this goes "
+                    f"({len(crops)} ticked)"), None, []
+        q = find_in_group(page, f["question"], group, crops[0])
+        if q is None:
+            return f"FAILED: no '{f['question']}' found in the {crops[0]} block of the form", None, []
+    else:
+        q = find_question(page, f["question"], f.get("instance", 0))
     if q is None:
         return "FAILED: question not found on the form", None, []
     if not bring_into_view(page, q):
         return "SKIPPED: question is hidden on the form (skip logic) - clear the value if it should be empty", None, []
     try:
-        return fill_question(page, q, f["value"], f.get("flags"))
+        res = fill_question(page, q, f["value"], f.get("flags"))
+        if res[1] in ("radio", "checkbox"):
+            ticked[norm(f["question"])] = q.evaluate(TICKED_JS)
+        return res
     except Exception as e:  # keep going, report at the end
         return f"FAILED: {type(e).__name__}: {str(e).splitlines()[0][:150]}", None, []
 
@@ -262,8 +310,9 @@ def run_row(form_url, fields, *, submit=False, may_submit=None, headless=True, s
             remove = "#save-draft, .save-draft" + ("" if submit else ", #submit-form, .submit-form")
             page.evaluate("sel => document.querySelectorAll(sel).forEach(e => e.remove())", remove)
 
+            ticked = {}
             for f in fields:
-                status, kind, opts = _fill_field(page, f)
+                status, kind, opts = _fill_field(page, f, ticked)
                 out["results"].append({"status": status, "kind": kind, "options": opts})
                 log(f"  {f['question'][:55]:55} = {f['value'][:25]:25} -> {status}")
 

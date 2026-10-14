@@ -7,6 +7,9 @@ block of old-version questions that have no data at all. The data itself is comp
 order, so we re-anchor it: every choice question's answer is an XML choice name (e.g.
 "rainfed_only") that we can recognise next to its option columns ("…/Rainfed only"). The column
 where that name really sits tells us the shift at that point of the sheet.
+
+Kobo can also export "labels" instead of XML values ("Agriculture (own land)"); then the answer
+is matched as whole option labels (parse_labels), which anchors the columns the same way.
 """
 import datetime as dt
 import io
@@ -90,6 +93,48 @@ def _is_choice_name(token, names):
     return False
 
 
+def _norm_label(s):
+    return " ".join(str(s).split()).lower()
+
+
+def parse_labels(value, options):
+    """
+    Indexes of the options a "labels" export answer is made of, e.g. "Borewell Tank / Pond" ->
+    [Borewell, Tank / Pond]. Kobo joins the labels of a multiple choice with spaces, and labels
+    contain spaces too, so the whole text must split into known labels (longest label first,
+    backtracking if needed). None if it doesn't.
+    """
+    text = _norm_label(value)
+    labels = sorted(((_norm_label(o), i) for i, o in enumerate(options) if _norm_label(o)),
+                    key=lambda x: -len(x[0]))
+    if not text or not labels:
+        return None
+
+    def walk(pos, picked):
+        if pos == len(text):
+            return picked
+        for lab, i in labels:
+            end = pos + len(lab)
+            if text.startswith(lab, pos) and (end == len(text) or text[end] == " "):
+                found = walk(end + 1 if end < len(text) else end, picked + [i])
+                if found is not None:
+                    return found
+        return None
+
+    picked = walk(0, [])
+    return list(dict.fromkeys(picked)) if picked is not None else None
+
+
+def _is_choice_col(df, j, names, options):
+    """Does column j hold this question's answers (as XML choice names or as option labels)?"""
+    vals = [str(v).strip() for v in df.iloc[:, j] if not is_blank(v)]
+    if not vals:
+        return False
+    if all(_is_choice_name(t, names) for v in vals for t in v.split()):
+        return True
+    return all(parse_labels(v, options) is not None for v in vals)
+
+
 def _blank_col(df, j):
     return 0 <= j < df.shape[1] and all(is_blank(v) for v in df.iloc[:, j])
 
@@ -153,13 +198,13 @@ def build_mapping(df):
         e = {"header": h, "hcol": i, "off": off, "alt_off": None, "conf": "ok"}
         anchored = None
         if h in kids:
-            names = [slug(k[len(h):].lstrip()[1:]) for k in kids[h]]
+            labels = [k[len(h):].lstrip()[1:].strip() for k in kids[h]]
+            names = [slug(lab) for lab in labels]
             for o in range(off, off + 15):  # the shift only ever grows
                 j = i + o
                 if j >= data_meta_start:
                     break
-                toks = _tokens(df, j)
-                if toks and all(_is_choice_name(t, names) for t in toks):
+                if _is_choice_col(df, j, names, labels):
                     anchored = o
                     break
             if anchored is not None:
@@ -189,8 +234,7 @@ def build_mapping(df):
             "multi": False,
         }
         if m["options"]:
-            opt_slugs = [slug(o) for o in m["options"]]
-            m["multi"] = _is_multi(df, h, col, m["kid_cols"], opt_slugs)
+            m["multi"] = _is_multi(df, h, col, m["kid_cols"], m["options"])
         elif 0 <= col < n:
             # plain yes/no questions have no option columns in the export; offer Yes/No anyway
             vals = {clean_value(h, v).lower() for v in df.iloc[:, col]} - {""}
@@ -201,16 +245,160 @@ def build_mapping(df):
         elif col >= data_meta_start:
             m["conf"] = "phantom"
         mapping.append(m)
+    _crop_tracker(df, mapping)
     return mapping
 
 
-def _is_multi(df, header, col, kid_cols, opt_slugs=None):
+# ----------------------------------------------------------------- crop tracker (Q27)
+# The form has one block per crop ("27 a1 kharif (Paddy)": Area, Yield, ...) that appears when the
+# crop is ticked in the season's "... Crop Name" question. Older form versions instead had one set
+# per season plus a free-text "Crop Name", and the "all versions" export spreads those values over
+# odd columns (Rabi yield in "Yield (Quintal/Acre).11", Rabi area in "Area (Acres).35", ...). So for
+# each season we tick the crop named in the text and fill the values into that crop's block.
+
+CROP_ALIASES = [  # free-text spellings seen in the Excel -> crop option label on the form
+    (r"pad+[a-z]?y|padfy|\badt\b|\bcr ?\d{3,4}\b|\bn?dlr\b|\bnlr\b|\brice\b", "Paddy"),
+    (r"\bg\.? ?nuts?\b|grou?n?d ?nuts?|^ground$", "Groundnut"),
+    (r"topica|cassava", "Tapioca"),
+    (r"^cash", "Cashewnut"),
+    (r"mosa?m?bi|sweet ?lime", "Mosambi"),
+    (r"totapuri|mango", "Mango"),
+    (r"అరటి", "Banana"),
+    (r"\bgram\b|\bdh?all?\b", "Pulses"),
+]
+
+
+def _compact(s):
+    return re.sub(r"[^a-z0-9]", "", str(s).lower())
+
+
+def resolve_crops(text, vocab):
+    """Free-text crop name(s) -> (crop option labels, parts that match no crop)."""
+    crops, unknown = [], []
+    for part in re.split(r",|/|&|\+|\band\b", str(text), flags=re.I):
+        part = part.strip()
+        if not re.sub(r"[\W_]+", "", part):  # only punctuation, e.g. "_"
+            continue
+        c = _compact(part)
+        hit = next((v for v in vocab if c and (c == _compact(v) or c.startswith(_compact(v)))), None)
+        if hit is None:
+            hit = next((crop for rx, crop in CROP_ALIASES if re.search(rx, part, re.I)), None)
+        if hit is None:
+            unknown.append(part)
+        elif hit not in crops:
+            crops.append(hit)
+    return crops, unknown
+
+
+def _rows_with_data(df, j):
+    return {r for r, v in enumerate(df.iloc[:, j]) if not is_blank(v)}
+
+
+def _crop_tracker(df, mapping):
+    H = [str(c) for c in df.columns]
+    seasons = [m for m in mapping if m["options"] and not m.get("yes_no")
+               and re.search(r"crop name$", m["header"], re.I)]
+    names = sorted((split_instance(h)[1], j) for j, h in enumerate(H) if split_instance(h)[0].lower() == "crop name")
+    if not seasons or len(names) != len(seasons):
+        return
+    if any(not _blank_col(df, m["col"]) for m in seasons):
+        return  # the export already has the crop ticks of the current form; nothing to repair
+
+    pos = {m["header"]: k for k, m in enumerate(mapping)}
+    starts = [pos[m["header"]] for m in seasons]
+    # value labels of a season block: the plain questions right after the first season question
+    slot_labels = []
+    for m in mapping[starts[0] + 1:]:
+        q = split_instance(m["header"])[0]
+        if m["options"] or q in slot_labels:
+            break
+        slot_labels.append(q)
+    in_slot = lambda m: split_instance(m["header"])[0] in slot_labels
+    spans = []
+    for k, s in enumerate(starts):
+        end = starts[k + 1] if k + 1 < len(starts) else len(mapping)
+        span = []
+        for m in mapping[s + 1:end]:
+            if not in_slot(m):
+                if k + 1 < len(starts):
+                    continue
+                break
+            span.append(m)
+        spans.append(span)
+    after = pos[spans[-1][-1]["header"]] if spans[-1] else starts[-1]
+    trailing = [m for m in mapping[after + 1:] if in_slot(m)]
+
+    vocab = [o for m in seasons for o in m["options"]]
+    for k, season in enumerate(seasons):
+        crop_col = names[k][1]
+        crop_rows = _rows_with_data(df, crop_col)
+        cols = []
+        for q in slot_labels:
+            best, score = None, 0.0
+            for m in spans[k] + trailing:
+                if split_instance(m["header"])[0] != q or m["conf"] == "tracker":
+                    continue
+                rows = _rows_with_data(df, m["col"])
+                j = len(rows & crop_rows) / len(rows | crop_rows) if rows else 0.0
+                if j > score:
+                    best, score = m, j
+            if best is not None:
+                cols.append((best["header"], q, best["col"]))
+        season["tracker"] = {"crop_col": crop_col, "cols": cols, "vocab": vocab}
+        for m in spans[k]:
+            m["conf"] = "tracker"
+    for m in trailing:
+        m["conf"] = "tracker"
+    for m in mapping:
+        if m["col"] in [j for _, j in names]:
+            m["conf"] = "tracker"  # the free-text Crop Name is not a question of the form
+
+
+def _tracker_fields(df, m, row):
+    """Fields of one season: tick the crop, then fill its block (located on the form by crop)."""
+    t = m["tracker"]
+    h = m["header"]
+    question = split_instance(h)[0]
+    crop_text = clean_value(h, _cell(row, t["crop_col"]))
+    values = [(hdr, q, clean_value(hdr, _cell(row, j))) for hdr, q, j in t["cols"]]
+    values = [v for v in values if v[2]]
+    if not crop_text and not values:
+        return []
+    crops, unknown = resolve_crops(crop_text, t["vocab"])
+    options = [[slug(o), o] for o in m["options"]]
+    options += [[slug(c), c] for c in crops if slug(c) not in [o[0] for o in options]]
+    note = ""
+    if not crop_text:
+        note = "The Excel has values for this season but no crop name; pick the crop."
+    elif unknown or not crops:
+        note = f"The Excel crop name '{crop_text}' is not one of the form's crops; pick the crop."
+    elif len(crops) > 1:
+        note = (f"The Excel crop name '{crop_text}' names {len(crops)} crops, but there is only one set "
+                f"of Area/Yield values; keep the one crop they belong to.")
+    out = [{
+        "header": h, "question": question, "instance": 0,
+        "value": " ".join(slug(c) for c in crops) if crops and not unknown else crop_text,
+        "excel_value": crop_text, "flags": [], "suggestion": "", "note": note,
+        "kind": "checkbox", "options": options, "group": "",
+    }]
+    for hdr, q, v in values:
+        out.append({
+            "header": hdr, "question": q, "instance": 0, "value": v, "excel_value": v,
+            "flags": [], "suggestion": "", "note": "", "kind": "", "options": [],
+            "group": question,  # filled inside the block of the crop ticked in `question`
+        })
+    return out
+
+
+def _is_multi(df, header, col, kid_cols, options):
     """Tick-all-that-apply question? (header says so, or some row has several answers)."""
     if re.search(r"tick all|select all|all that apply", header, re.I):
         return True
+    opt_slugs = [slug(o) for o in options]
     for r in range(len(df)):
         row = df.iloc[r]
-        if len(clean_value(header, _cell(row, col)).split()) > 1:
+        value = clean_value(header, _cell(row, col))
+        if value and len(choice_selected(value, None, options)) > 1:
             return True
         if sum(is_option_selected(_cell(row, j), opt_slugs[k] if opt_slugs and k < len(opt_slugs) else None) for k, j in enumerate(kid_cols)) > 1:
             return True
@@ -218,14 +406,19 @@ def _is_multi(df, header, col, kid_cols, opt_slugs=None):
 
 
 def choice_selected(value, flags, options):
-    """Indexes of the options an Excel answer picks: by XML choice name, combined with the 0/1 columns."""
-    names = [slug(o) for o in options]
-    picked = []
-    for t in value.split():
-        for i, n in enumerate(names):
-            if i not in picked and _is_choice_name(t, [n]):
-                picked.append(i)
-                break
+    """
+    Indexes of the options an Excel answer picks: by option label ("labels" export) or by XML
+    choice name, combined with the 0/1 columns.
+    """
+    picked = parse_labels(value, options)
+    if picked is None:
+        names = [slug(o) for o in options]
+        picked = []
+        for t in value.split():
+            for i, n in enumerate(names):
+                if i not in picked and _is_choice_name(t, [n]):
+                    picked.append(i)
+                    break
     if flags:
         for i, f in enumerate(flags):
             if f and i < len(options) and i not in picked:
@@ -256,7 +449,10 @@ def row_fields(df, mapping, r):
     row = df.iloc[r]
     out = []
     for m in mapping:
-        if m["conf"] in ("skip", "phantom"):
+        if m["conf"] in ("skip", "phantom", "tracker"):
+            continue
+        if "tracker" in m:
+            out += _tracker_fields(df, m, row)
             continue
         h = m["header"]
         value = clean_value(h, _cell(row, m["col"]))
@@ -297,6 +493,7 @@ def row_fields(df, mapping, r):
             "note": note,
             "kind": kind,
             "options": options,
+            "group": "",
         })
     return out
 
