@@ -17,7 +17,9 @@
       </div>
     {% endif %}
     
-    {% if f.status and not f.problem %}
+    {% if f.status|slice:':7' == 'WAITING' %}
+      <div class="meta" style="color: #64748b;">⏳ {{ f.status|slice:'9:' }}</div>
+    {% elif f.status and not f.problem %}
       <div class="meta" style="color: var(--ok); font-weight: 600;">✓ {{ f.status }}</div>
     {% endif %}
   </div>

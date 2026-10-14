@@ -17,6 +17,7 @@ from playwright.sync_api import TimeoutError as PWTimeout
 from playwright.sync_api import sync_playwright
 
 PROBLEM = ("FAILED", "SKIPPED")
+WAITING = "WAITING"  # value of a crop block whose crop isn't ticked: never submitted, but not flagged itself
 BLOCKS = "form.or label.question, form.or fieldset.question"
 
 LABELS_JS = """() => [...document.querySelectorAll('form.or label.question, form.or fieldset.question')]
@@ -227,9 +228,12 @@ def _fill_field(page, f, ticked):
     group = f.get("group") or ""
     if group:
         crops = ticked.get(norm(group), [])
-        if len(crops) != 1:
-            return (f"FAILED: needs exactly one crop ticked in '{group[:60]}' to know where this goes "
-                    f"({len(crops)} ticked)"), None, []
+        # not a problem of this field: the crop question itself is flagged, fix it there
+        if not crops:
+            return (f"WAITING: fills once a crop is ticked in '{group[:60]}'"), None, []
+        if len(crops) > 1:
+            return (f"WAITING: fills once only one crop is ticked in '{group[:60]}' "
+                    f"(now {', '.join(crops)})"), None, []
         q = find_in_group(page, f["question"], group, crops[0])
         if q is None:
             return f"FAILED: no '{f['question']}' found in the {crops[0]} block of the form", None, []
@@ -320,7 +324,7 @@ def run_row(form_url, fields, *, submit=False, may_submit=None, headless=True, s
             if screenshot:
                 out["screenshot"] = page.screenshot(full_page=True, type="jpeg", quality=55)
 
-            problems = [r for r in out["results"] if r["status"].startswith(PROBLEM)]
+            problems = [r for r in out["results"] if r["status"].startswith(PROBLEM + (WAITING,))]
             if not submit:
                 out["message"] = "Filled (check only, nothing submitted)."
             elif problems or out["invalid"]:

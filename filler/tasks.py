@@ -124,7 +124,8 @@ def fill_row(row_id, submit=False):
             f.kind, f.options = r["kind"], r["options"]
     Field.objects.bulk_update(fields, ["status", "kind", "options"])
 
-    flagged = [f for f in fields if f.needs_review]
+    # values still waiting for their crop keep the row in review even if the crop question was cleared
+    flagged = [f for f in fields if f.needs_review or f.status.startswith(browser.WAITING)]
     msg = [res["message"]]
     if res["invalid"]:
         msg.append("Form shows errors on: " + "; ".join(res["invalid"]))
