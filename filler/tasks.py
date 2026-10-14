@@ -86,6 +86,29 @@ def process_job(job_id):
         pass
 
 
+def _submit_still_enabled():
+    """
+    Re-read the Settings switch. Called from inside Playwright's sync API, which runs an event loop
+    in this thread, so Django refuses ORM calls here (SynchronousOnlyOperation); read it in a
+    separate thread instead. Any error counts as "no".
+    """
+    out = {"ok": False}
+
+    def read():
+        close_old_connections()
+        try:
+            out["ok"] = AppSettings.get().submit_enabled
+        except Exception:
+            log.exception("could not re-check the submit setting")
+        finally:
+            close_old_connections()
+
+    t = threading.Thread(target=read, daemon=True)
+    t.start()
+    t.join(10)
+    return out["ok"]
+
+
 def fill_row(row_id, submit=False):
     """Fill one row in the browser. submit=True submits only if Settings allow it and nothing is wrong."""
     try:
@@ -106,7 +129,7 @@ def fill_row(row_id, submit=False):
 
     try:
         res = browser.run_row(cfg.form_url, payload, submit=real_submit,
-                              may_submit=lambda: AppSettings.get().submit_enabled, headless=cfg.headless,
+                              may_submit=_submit_still_enabled, headless=cfg.headless,
                               slow_mo=cfg.slow_mo, screenshot=True, log=log.info)
     except Exception as e:
         try:
